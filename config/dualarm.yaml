@@ -1,0 +1,14 @@
+reward_shaping: False
+reward_mimic: True
+reward_success: 200
+reward_defeat: -200
+reward_scale: 3.0
+replay_dir: ""
+replay_prefix: ""
+state_last_action: True # False: critic adds last action internally
+state_timestep_number: False
+seed: null
+debug: False
+episode_limit: 100
+obs_choose: "all"
+
