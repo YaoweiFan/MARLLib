@@ -2,3 +2,4 @@
 *.pyo
 results
 __pycache__
+.idea
