@@ -27,7 +27,9 @@ def config_sanity_check_and_adjust(config, log):
 
 
 def run_sequential(args, logger):
-    runner = ParallelRunner(logger, args.device, args.batch_size_run, args.env, args.env_args)
+    runner = ParallelRunner(logger, args.device, args.batch_size_run, args.clip_obs, args.clip_state, args.epsilon,
+                            args.use_running_normalize, args.test_n_episodes, args.runner_log_interval, args.env,
+                            args.env_args)
     env_info = runner.get_env_info()
 
     # 创建 on_policy buffer 和 off_policy buffer

@@ -16,6 +16,9 @@ class RunningMeanStd(object):
         self.var = np.ones(shape, np.float64)
         self.count = epsilon
 
+        self.epsilon = epsilon
+        self.shape = shape
+
     def update(self, batch_mean, batch_var, batch_count) -> None:
         self.update_from_moments(batch_mean, batch_var, batch_count)
 
@@ -34,6 +37,11 @@ class RunningMeanStd(object):
         self.mean = new_mean
         self.var = new_var
         self.count = new_count
+
+    def clear(self):
+        self.mean = np.zeros(self.shape, np.float64)
+        self.var = np.ones(self.shape, np.float64)
+        self.count = self.epsilon
 
 
 class VecNormalize:
