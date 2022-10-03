@@ -1,7 +1,7 @@
 import torch as th
 
 from rnn_agent import RNNAgent
-from MARLLib.utils.action_selector import SELECTOR
+from action_selector import MultinomialActionSelector
 
 
 class Controller:
@@ -9,7 +9,6 @@ class Controller:
 
     def __init__(self,
                  scheme,
-                 batch_size_run,
                  n_agents,
                  agent_output_type,
                  obs_last_action,
@@ -17,14 +16,12 @@ class Controller:
                  mask_before_softmax,
                  rnn_hidden_dim,
                  n_actions,
-                 action_selector,
 
                  epsilon_start,
                  epsilon_finish,
                  epsilon_anneal_time,
                  test_greedy):
 
-        self.batch_size_run = batch_size_run
         self.n_agents = n_agents
         self.n_actions = n_actions
         self.agent_output_type = agent_output_type
@@ -40,13 +37,13 @@ class Controller:
         # 创建 controller
         self.controller = RNNAgent(input_shape, rnn_hidden_dim, n_actions)
         # 创建 action selector
-        self.action_selector = SELECTOR[action_selector](epsilon_start, epsilon_finish, epsilon_anneal_time,
+        self.action_selector = MultinomialActionSelector(epsilon_start, epsilon_finish, epsilon_anneal_time,
                                                          test_greedy)
         self.hidden_states = None
 
-    def init_hidden(self):
+    def init_hidden(self, batch_size):
         self.hidden_states = self.controller.init_hidden().unsqueeze(0).unsqueeze(0) \
-            .expand(self.batch_size_run, self.n_agents, -1)
+            .expand(batch_size, self.n_agents, -1)
 
     def select_actions(self, ep_batch, episode_step, steps, avail_env=slice(None), test_mode=False):
         avail_actions = ep_batch["avail_actions"][:, episode_step]
@@ -88,6 +85,9 @@ class Controller:
             outputs = th.nn.functional.softmax(outputs, dim=-1)
 
             # TODO: selector 中已包含 epsilon-greedy，这部分是否有必要？
+            # ANSWER: 需要反向梯度传导，有必要
+            #         这部分与 selector 中的 epsilon-greedy 实现含义完全相同（评估策略和行为策略完全一致）
+            #         但拿这里的输出再作为 selector_actions 的输入，相当于进行了两次 epsilon-greedy, 是否有误？
             # epsilon-greedy
             if not test_mode:
                 action_num = avail_actions_reshaped.sum(dim=1, keepdim=True).float() if self.mask_before_softmax \

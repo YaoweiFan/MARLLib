@@ -103,6 +103,7 @@ class ParallelRunner:
         self.env_info = self.parent_conns[0].recv()
         self.episode_limit = self.env_info["episode_limit"]
 
+        # TODO: running normalize 是否可以放到 preprocess 中去？
         self.normalizer = VecNormalize(self.env_info["obs_shape"]*self.env_info["n_agents"],
                                        self.env_info["state_shape"],
                                        clip_obs,
@@ -157,7 +158,7 @@ class ParallelRunner:
 
     def rollout(self, test_mode):
         self.reset(test_mode)
-        self.controller.init_hidden()
+        self.controller.init_hidden(self.batch_size_run)
 
         episode_reward = [0 for _ in range(self.batch_size_run)]
         episode_length = [0 for _ in range(self.batch_size_run)]
@@ -168,7 +169,11 @@ class ParallelRunner:
         while len(avail_env) > 0:
             actions = self.controller.select_actions(self.batch, self.episode_step, self.steps, avail_env, test_mode)
             # actions 增加的维度在 episode_step 上
-            # mark_filled 有什么用处？
+            # TODO: mark_filled 有什么用处？
+            # ANSWER: terminated 用来表明环境因失败终止
+            #         1. 若存在 terminated[t] == True, 那 t 就是最后一步且走完第 t 步环境失败，最后一步的 Q(t+1) 不需要计算
+            #         2. 若不存在 terminated[t] == True, 超时或是成功，最后一步的 Q(t+1) 需要计算
+            #         mark_filled 可以不要，使用 mark_filled 可以方便计算
             self.batch.update({"actions": actions.unsqueeze(1)}, avail_env, self.episode_step, mark_filled=False)
 
             # 将 actions 下达给每个未 terminated 的子环境
@@ -195,7 +200,8 @@ class ParallelRunner:
                 # 更新当前步的 post 信息
                 post_transition_data["reward"].append((data["reward"],))
                 # TODO: 对于失败停止和超步停止，需要进行区分吗？
-                post_transition_data["terminated"].append((data["terminated"],))
+                # ANSWER: 失败停止，最后一步 t 在计算 td_lambda 的时候是用不上 Q(t+1) 的，超步停止则需要
+                post_transition_data["terminated"].append((data["terminated"] and not data["info"]["timeout"],))
                 # 更新 episode_final_info，环境顺序无所谓
                 if data["terminated"]:
                     episode_final_info.append(data["info"])

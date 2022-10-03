@@ -60,6 +60,3 @@ class MultinomialActionSelector:
         assert (th.gather(avail_actions, dim=2, index=picked_actions.unsqueeze(2)) > 0.99).all()
 
         return picked_actions
-
-
-SELECTOR = {"multinomial": MultinomialActionSelector}

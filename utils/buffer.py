@@ -128,6 +128,8 @@ class EpisodeBatch:
                                                                     dtype=dtype, device=self.device)
 
     def to(self, device):
+        if device == self.device:
+            return
         for k, v in self.data.transition_data.items():
             self.data.transition_data[k] = v.to(device)
         for k, v in self.data.episode_data.items():
@@ -135,6 +137,10 @@ class EpisodeBatch:
         self.device = device
 
     def update(self, data, bs=slice(None), ts=slice(None), mark_filled=True):
+        """
+        bs: batch slice
+        ts: episode step slice
+        """
         slices = parse_slices((bs, ts))
         for k, v in data.items():
             if k in self.data.transition_data:
@@ -162,6 +168,7 @@ class EpisodeBatch:
                 target[new_k][_slices] = v.view_as(target[new_k][_slices])
 
     def __getitem__(self, item):
+        """下标取值操作"""
         if isinstance(item, str):
             if item in self.data.episode_data:
                 return self.data.episode_data[item]
@@ -204,6 +211,7 @@ class EpisodeBatch:
         return th.sum(self.data.transition_data["filled"], 1).max(0)[0]
 
     def __repr__(self):
+        """直接输出对象和 print 对象时会调用此函数"""
         return "EpisodeBatch. Batch Size:{} Max_seq_len:{} Keys:{} Groups:{}".format(self.batch_size,
                                                                                      self.max_seq_length,
                                                                                      self.scheme.keys(),
@@ -219,6 +227,7 @@ class ReplayBuffer(EpisodeBatch):
         self.episodes_in_buffer = 0
 
     def insert_episode_batch(self, ep_batch):
+        """环形 buffer，在 buffer 中保存的永远是最新的 buffer_size 个 episode 数据"""
         if self.buffer_index + ep_batch.batch_size <= self.buffer_size:
             self.update(ep_batch.data.transition_data,
                         slice(self.buffer_index, self.buffer_index + ep_batch.batch_size),
@@ -232,13 +241,16 @@ class ReplayBuffer(EpisodeBatch):
             assert self.buffer_index < self.buffer_size
         else:
             buffer_left = self.buffer_size - self.buffer_index
+            # 先装满 buffer
             self.insert_episode_batch(ep_batch[0:buffer_left, :])
+            # 再从 buffer 头部开始装
             self.insert_episode_batch(ep_batch[buffer_left:, :])
 
     def can_sample(self, batch_size):
         return self.episodes_in_buffer >= batch_size
 
     def uni_sample(self, batch_size):
+        """uniform sample"""
         assert self.can_sample(batch_size)
         if self.episodes_in_buffer == batch_size:
             return self[:batch_size]
@@ -250,8 +262,7 @@ class ReplayBuffer(EpisodeBatch):
     def sample_latest(self, batch_size):
         assert self.can_sample(batch_size)
         if self.buffer_index - batch_size < 0:
-            # Uniform sampling
-            return self.uni_sample(batch_size)
+            return self[0: self.buffer_index].extend(self[self.buffer_index-batch_size:])
         else:
             # Return the latest
             return self[self.buffer_index - batch_size: self.buffer_index]

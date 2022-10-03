@@ -1,4 +1,4 @@
-# --- pymarl options ---
+# --- MARLLib options ---
 runner: "parallel" # Runs 1 env for an episode
 mac: "basic_mac" # Basic controller
 env: "dualarm" # Environment name
@@ -26,20 +26,20 @@ local_results_path: "results" # Path for local results
 
 # --- RL hyperparameters ---
 gamma: 0.99
-batch_size: 16 # Number of episodes to train on
-buffer_size: 32 # Size of the replay buffer
+on_batch_size: 16 # Number of episodes to train on
+on_buffer_size: 32 # Size of the replay buffer
 off_batch_size: 32  # Number of off-policy episodes to train on
 off_buffer_size: 5000 # size of the off-policy buffer
-lr: 0.0005 # Learning rate for agents
+actor_lr: 0.0005 # Learning rate for agents
 critic_lr: 0.0001 # Learning rate for critics
+mixer_lr: 0.0001 # Learning rate for mixer
 optim_alpha: 0.99 # RMSProp alpha
 optim_eps: 0.00001 # RMSProp epsilon
 grad_norm_clip: 20 # Reduce magnitude of gradients above this L2 norm
 target_update_interval: 600 # update the target network every {} training steps
-step: 5 # steps for tree back up diagram  (adjustable based on # of agents)
+tree_backup_step: 5 # steps for tree back up diagram  (adjustable based on # of agents)
 td_lambda: 0.8
 tb_lambda: 0.93
-
 
 # --- Agent parameters ---
 agent: "rnn" # Default rnn agent
@@ -47,16 +47,12 @@ rnn_hidden_dim: 64 # Size of hidden state for default rnn agent
 obs_agent_id: True # Include the agent's one_hot id in the observation
 obs_last_action: True # Include the agent's last action (one_hot) in the observation
 
+# --- Critic parameters ---
+critic_hidden_dim: 256
+
 # --- Experiment running params ---
 repeat_id: 1
 label: "default_label"
-
-# --- Normalizer ---
-clip_obs: 10.0
-clip_state: 10.0
-epsilon: 1e-8
-use_running_normalize: True
-
 
 # --- COMA specific parameters ---
 action_selector: "multinomial"
@@ -64,7 +60,6 @@ epsilon_start: .5
 epsilon_finish: .05
 epsilon_anneal_time: 500000
 mask_before_softmax: False
-
 
 # use qmix
 mixing_embed_dim: 32
@@ -77,5 +72,11 @@ critic_baseline_fn: "coma"
 critic_train_mode: "seq"
 critic_train_reps: 1
 q_nstep: 0  # 0 corresponds to default Q, 1 is r + gamma*Q, etc
+
+# --- Normalizer ---
+clip_obs: 10.0
+clip_state: 10.0
+epsilon: 1e-8
+use_running_normalize: True
 
 name: "offpg"
