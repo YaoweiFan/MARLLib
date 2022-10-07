@@ -80,3 +80,5 @@ epsilon: 1e-8
 use_running_normalize: True
 
 name: "offpg"
+
+record_param: False  # record controller network or not

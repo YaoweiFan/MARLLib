@@ -1,36 +1,23 @@
-evaluate: True
-# checkpoint_path: "/home/fyw/Documents/projects/dual-arm-mimic/results/models/offpg_smac__2021-03-08_22-00-27"
-# checkpoint_path: "/home/fyw/Documents/projects/dual-arm-mimic/results/models/offpg_smac__2021-03-11_20-46-43"
-# checkpoint_path: "/home/fyw/Documents/projects/dual-arm-mimic/results/models/offpg_smac__2021-03-20_10-13-41"
-# checkpoint_path: "/home/fyw/Documents/projects/dual-arm-mimic/results/models/offpg_smac__2021-03-23_21-25-52"
-# checkpoint_path: "/home/fyw/Documents/projects/dual-arm-mimic/results/models/offpg_smac__2021-03-29_12-51-25"
-# checkpoint_path: "/home/fyw/Documents/projects/dual-arm-mimic/results/models/offpg_smac__2021-04-01_17-44-01"
-# checkpoint_path: "/home/fyw/Documents/projects/dual-arm-mimic/results/models/offpg_smac__2021-04-01_17-47-36"
-# checkpoint_path: "/home/fyw/Documents/projects/dual-arm-mimic/results/models/offpg_smac__2021-04-01_22-48-38"
-# checkpoint_path: "/home/fyw/Documents/projects/dual-arm-mimic/results/models/offpg_smac__2021-04-01_23-16-26"
+offpg_args:
+  evaluate: True
+  checkpoint_path: "results/models/offpg_smac__2022-02-12_19-16-17"
+  runner: "episode"
+  batch_size_run: 1
 
-checkpoint_path: "/home/fyw/Documents/projects/dual-arm-mimic/results/models/offpg_smac__2022-02-12_19-16-17"
-
-runner: "episode"
-batch_size_run: 1 #10
-video_record: False
-skip_frame: 1
-path_record: True
-ft_record: False
-state_record: True
+evaluate_args:
+  evaluate_n_episodes: 10
+  video_record: False
+  skip_frame: 1
+  video_save_path: "video"
+  path_record: True
+  path_save_path: "path"
+  ft_record: False
+  ft_save_path: "ft"
+  state_record: True
+  state_save_path: "state"
 
 env_args:
-  reward_shaping: True
-  reward_success: 200
-  reward_defeat: -200
-  reward_scale: 3.0
-  replay_dir: ""
-  replay_prefix: ""
-  state_last_action: True
-  state_timestep_number: False
-  seed: null
-  debug: False
-  episode_limit: 100
+  # Mujoco 相关
   has_renderer: True
   # has_renderer: False
   # has_offscreen_renderer: True

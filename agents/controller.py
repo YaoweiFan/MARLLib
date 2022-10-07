@@ -1,4 +1,6 @@
+import os
 import torch as th
+import numpy as np
 
 from rnn_agent import RNNAgent
 from action_selector import MultinomialActionSelector
@@ -98,3 +100,37 @@ class Controller:
                     outputs[avail_actions_reshaped == 0] = 0.0
 
         return outputs.view(ep_batch.batch_size, self.n_agents, -1)
+
+    def cuda(self):
+        self.controller.cuda()
+
+    def save_models(self, path):
+        th.save(self.controller.state_dict(), "{}/agent.th".format(path))
+
+    def load_models(self, path, record_param=False):
+        self.controller.load_state_dict(th.load("{}/agent.th".format(path), map_location=lambda storage, loc: storage))
+        if record_param:
+            self.record(os.path.join(path, "parameters"))
+            raise Exception("Controller network loaded successfully!")
+
+    def record(self, path):
+        # 记录 controller 网络参数
+        np.savetxt(path + 'fc1_weight.txt', self.controller.state_dict()["fc1.weight"].cpu().numpy())
+        np.savetxt(path + 'fc1_bias.txt', self.controller.state_dict()["fc1.bias"].cpu().numpy())
+
+        np.savetxt(path + 'gru_wir.txt', self.controller.state_dict()["rnn.weight_ih"].cpu().numpy()[:64, :])
+        np.savetxt(path + 'gru_wiz.txt', self.controller.state_dict()["rnn.weight_ih"].cpu().numpy()[64:128, :])
+        np.savetxt(path + 'gru_win.txt', self.controller.state_dict()["rnn.weight_ih"].cpu().numpy()[128:, :])
+        np.savetxt(path + 'gru_bir.txt', self.controller.state_dict()["rnn.bias_ih"].cpu().numpy()[:64])
+        np.savetxt(path + 'gru_biz.txt', self.controller.state_dict()["rnn.bias_ih"].cpu().numpy()[64:128])
+        np.savetxt(path + 'gru_bin.txt', self.controller.state_dict()["rnn.bias_ih"].cpu().numpy()[128:])
+
+        np.savetxt(path + 'gru_whr.txt', self.controller.state_dict()["rnn.weight_hh"].cpu().numpy()[:64, :])
+        np.savetxt(path + 'gru_whz.txt', self.controller.state_dict()["rnn.weight_hh"].cpu().numpy()[64:128, :])
+        np.savetxt(path + 'gru_whn.txt', self.controller.state_dict()["rnn.weight_hh"].cpu().numpy()[128:, :])
+        np.savetxt(path + 'gru_bhr.txt', self.controller.state_dict()["rnn.bias_hh"].cpu().numpy()[:64])
+        np.savetxt(path + 'gru_bhz.txt', self.controller.state_dict()["rnn.bias_hh"].cpu().numpy()[64:128])
+        np.savetxt(path + 'gru_bhn.txt', self.controller.state_dict()["rnn.bias_hh"].cpu().numpy()[128:])
+
+        np.savetxt(path + 'fc2_weight.txt', self.controller.state_dict()["fc2.weight"].cpu().numpy())
+        np.savetxt(path + 'fc2_bias.txt', self.controller.state_dict()["fc2.bias"].cpu().numpy())

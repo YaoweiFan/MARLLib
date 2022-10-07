@@ -1,5 +1,6 @@
 import copy
 import torch as th
+import numpy as np
 from torch.optim import RMSprop
 from torch.nn.utils import clip_grad_norm
 
@@ -26,6 +27,7 @@ class OffPGLearner:
                  td_lambda,
                  grad_norm_clip,
                  target_update_interval,
+                 learner_log_interval,
                  tree_backup_step
                  ):
 
@@ -38,6 +40,7 @@ class OffPGLearner:
         self.td_lambda = td_lambda
         self.grad_norm_clip = grad_norm_clip
         self.target_update_interval = target_update_interval
+        self.learner_log_interval = learner_log_interval
         self.tree_backup_step = tree_backup_step
 
         # model
@@ -47,16 +50,20 @@ class OffPGLearner:
         self.target_mixer = copy.deepcopy(self.mixer)
 
         # optimiser
-        agent_params = list(self.controller.parameters())
-        self.agent_optimiser = RMSprop(params=agent_params, lr=actor_learning_rate, alpha=optim_alpha, eps=optim_eps)
+        self.agent_params = list(self.controller.parameters())
+        self.agent_optimiser = RMSprop(params=self.agent_params, lr=actor_learning_rate, alpha=optim_alpha,
+                                       eps=optim_eps)
         critic_params = list(self.critic.parameters())
-        self.critic_optimiser = RMSprop(params=critic_params, lr=critic_learning_rate, alpha=optim_alpha, eps=optim_eps)
+        self.critic_optimiser = RMSprop(params=critic_params, lr=critic_learning_rate, alpha=optim_alpha,
+                                        eps=optim_eps)
         mixer_params = list(self.mixer.parameters())
-        self.mixer_optimiser = RMSprop(params=mixer_params, lr=mixer_learning_rate, alpha=optim_alpha, eps=optim_eps)
+        self.mixer_optimiser = RMSprop(params=mixer_params, lr=mixer_learning_rate, alpha=optim_alpha,
+                                       eps=optim_eps)
         self.critic_and_mixer_params = critic_params + mixer_params
 
         self.critic_training_count = 0
-        self.last_critic_training_count = -1
+        self.last_critic_training_log_count = -1
+        self.last_actor_training_log_step = -1
 
     def _build_critic_inputs(self, state, obs, batch_size, max_t, device):
         """
@@ -88,11 +95,37 @@ class OffPGLearner:
 
         for t in range(rewards.shape[1]-1, -1, -1):
             # TODO 这里与源代码略有区别
-            g_lambda[:, t, :] = ( self.td_lambda * self.gamma * g_lambda[:, t+1, :] + mask[:, t, :] *
-                                  (rewards[:, t, :] + (1-self.td_lambda) * self.gamma * target_q_total[:, t+1, :]) ) \
-                                * (1 - terminated[:, t, :])  # 有些 batch 很早就因为失败而停止了，
-                                                             # terminated[t] == True 的那一步，g_lambda[t] 应为 0
+            # 有些 batch 很早就因为失败而停止了，terminated[t] == True 的那一步，g_lambda[t] 应为 0
+            g_lambda[:, t, :] = (self.td_lambda * self.gamma * g_lambda[:, t+1, :] + mask[:, t, :] *
+                                 (rewards[:, t, :] + (1-self.td_lambda) * self.gamma * target_q_total[:, t+1, :])) \
+                                * (1 - terminated[:, t, :])
+
         return g_lambda
+
+    def cuda(self):
+        self.critic.cuda()
+        self.mixer.cuda()
+        self.target_critic.cuda()
+        self.target_mixer.cuda()
+
+    def save_models(self, path):
+        th.save(self.critic.state_dict(), "{}/critic.th".format(path))
+        th.save(self.mixer.state_dict(), "{}/mixer.th".format(path))
+        th.save(self.agent_optimiser.state_dict(), "{}/agent_opt.th".format(path))
+        th.save(self.critic_optimiser.state_dict(), "{}/critic_opt.th".format(path))
+        th.save(self.mixer_optimiser.state_dict(), "{}/mixer_opt.th".format(path))
+
+    def load_models(self, path):
+        self.critic.load_state_dict(th.load("{}/critic.th".format(path), map_location=lambda storage, loc: storage))
+        self.mixer.load_state_dict(th.load("{}/mixer.th".format(path), map_location=lambda storage, loc: storage))
+        # self.target_critic.load_state_dict(self.critic.agent.state_dict())
+        # self.target_mixer.load_state_dict(self.mixer.state_dict())
+        self.agent_optimiser.load_state_dict(
+            th.load("{}/agent_opt.th".format(path), map_location=lambda storage, loc: storage))
+        self.critic_optimiser.load_state_dict(
+            th.load("{}/critic_opt.th".format(path), map_location=lambda storage, loc: storage))
+        self.mixer_optimiser.load_state_dict(
+            th.load("{}/mixer_opt.th".format(path), map_location=lambda storage, loc: storage))
 
     def deal_with_off_batch(self, off_batch):
         batch_size = off_batch.batch_size
@@ -116,9 +149,9 @@ class OffPGLearner:
         # action_probs: (batch_size, max_episode_length, n_agents, n_actions)
         action_probs = th.stack(action_probs, dim=1)
         # 若 mask_before_softmax == True，无需以下操作
-        action_probs[avail_actions==0] = 0
-        action_probs = action_probs / action_probs.sum(dim=-1, keepdim=True) # -1: 最后一维
-        action_probs[avail_actions==0] = 0
+        action_probs[avail_actions == 0] = 0
+        action_probs = action_probs / action_probs.sum(dim=-1, keepdim=True)  # -1: 最后一维
+        action_probs[avail_actions == 0] = 0
         joint_action_prob = th.gather(action_probs, 3, actions).squeeze(3).prod(dim=2, keepdim=True)[:, -1, :]
 
         # 计算 target
@@ -131,7 +164,7 @@ class OffPGLearner:
         # expected_q_total[:, -1, :] = expected_q_total[:, -1, :] * (1 - th.sum(terminated, dim=1))
         expected_q_total = expected_q_total * mask * (1 - terminated)
         # delta 对于每个 episode 的有效区间为: [0, terminated_step]
-        delta = rewards + self.gamma * expected_q_total[:, 1:, :]* mask * (1 - terminated) - target_q_total[:, :-1, :]
+        delta = rewards + self.gamma * expected_q_total[:, 1:, :] * mask * (1 - terminated) - target_q_total[:, :-1, :]
 
         tree_backup = th.zeros_like(delta)
         coefficient = 1.0
@@ -145,7 +178,7 @@ class OffPGLearner:
 
         return inputs, state, actions, mask, tree_backup, max_episode_length
 
-    def train_critic(self, on_batch: EpisodeBatch, off_batch: EpisodeBatch=None, critic_running_log=None):
+    def train_critic(self, on_batch: EpisodeBatch, off_batch: EpisodeBatch = None, critic_running_log=None):
         """
         pre_transition_data = {                             pre_transition_data = {
             "state": [],                                        "state": [],
@@ -204,7 +237,7 @@ class OffPGLearner:
 
         # train critic and mixer network
         for t in range(max_episode_length-1):
-            mask_t = mask[:, t:t+1, :] # 如果中间是 t 的话，就相当于是按下标取值了，这样就会少一维
+            mask_t = mask[:, t:t+1, :]  # 如果中间是 t 的话，就相当于是按下标取值了，这样就会少一维
             assert mask_t.sum() > 0.9, "max_episode_length is not correct!"
 
             # q_locals: (batch_size, 1, n_agents, n_actions)
@@ -241,13 +274,78 @@ class OffPGLearner:
             critic_running_log["q_locals_min_var"].append(
                 (th.var(q_locals.min(dim=3)[0], dim=2, keepdim=True) * mask_t).sum().item() / mask_num)
 
-        if self.critic_training_count - self.last_critic_training_count > self.target_update_interval:
+        if (self.critic_training_count - self.last_critic_training_log_count > self.target_update_interval) or \
+                (self.last_critic_training_log_count == -1):
             # update target network
             self.target_critic.load_state_dict(self.critic.state_dict())
             self.target_mixer.load_state_dict(self.critic.state_dict())
-            self.logger.info("critic_training_count: "+ str(self.critic_training_count) +", updated target network")
-            self.last_critic_training_count = self.critic_training_count
+            self.logger.info("critic_training_count: " + str(self.critic_training_count) + ", updated target network")
+            self.last_critic_training_log_count = self.critic_training_count
 
-    def train_actor(self):
+    def train_actor(self, batch: EpisodeBatch, total_steps, critic_running_log=None):
+        batch_size = batch.batch_size
+        max_episode_length = batch.max_seq_length
+        device = batch.device
 
+        state = batch["state"]  # state: (batch_size, max_episode_length, state_dim)
+        # avail_actions = batch["avail_actions"]
+        obs = batch["obs"]
 
+        # 这里与 train_critic 不同的原因是为了方便 log_pi_selected 的计算
+        actions = batch["actions"][:, :-1, :]  # actions: (batch_size, max_seq_length-1, n_agents, 1)
+        terminated = batch["terminated"][:, :-1, :].float()
+        mask = batch["filled"][:, :-1, :].float()
+        # terminated == True: mask 填充到这一步位置（包括这一步）
+        # 不存在 terminated == True: mask 填充到最后一步（max_seq_length-1）
+        # Q 值通过 critic 网络得到，不需要考虑现实情况（terminated 了 Q 就得为零）
+        mask[:, 1:, :] = mask[:, 1:, :] * (1 - terminated[:, :-1])
+        mask = mask.repeat(1, 1, self.n_agents).reshape(-1)
+
+        # inputs: (batch_size, episode_steps, n_agents, state_dim+obs_dim+n_agents)
+        inputs = self._build_critic_inputs(state, obs, batch_size, max_episode_length, device)
+        q_locals = self.critic(inputs).detach()[:, :-1, :]
+
+        # 通过 actor 网络得到 action probability
+        self.controller.init_hidden(batch_size)
+        action_probs = [self.controller(batch, t) for t in range(max_episode_length-1)]
+        action_probs = th.stack(action_probs, dim=1)
+        # # 若 mask_before_softmax == True，无需以下操作
+        # action_probs[avail_actions==0] = 0
+        # action_probs = action_probs / action_probs.sum(dim=-1, keepdim=True) # -1: 最后一维
+        # action_probs[avail_actions==0] = 0
+
+        # 计算 baseline: 一维向量, batch_size * max_episode_length * n_agents
+        baseline = th.sum(action_probs*q_locals, dim=-1).reshape(-1).detach()
+
+        # 计算 advantages: 一维向量, batch_size * max_episode_length * n_agents
+        q_locals_selected = th.gather(q_locals, dim=3, index=actions).squeeze(3)
+        advantages = (q_locals_selected.reshape(-1) - baseline).detach()
+
+        # 计算 log_pi_selected
+        pi = action_probs.reshape(-1, self.n_actions)  # (batch_size * max_episode_length * n_agents, n_actions)
+        pi_selected = th.gather(pi, dim=1, index=actions.reshape(-1, 1)).squeeze(1)  # 一维向量
+        pi_selected[mask == 0] = 0
+        log_pi_selected = th.log(pi_selected)
+
+        # 计算 coma loss
+        coefficient = self.mixer.get_k(state[:, :-1, :], batch_size).reshape(-1)
+        coma_loss = (log_pi_selected * coefficient * advantages * mask).sum() / mask.sum()
+
+        self.agent_optimiser.zero_grad()
+        coma_loss.backward()
+        # 限制梯度
+        grad_norm = clip_grad_norm(self.agent_params, self.grad_norm_clip)
+        self.agent_optimiser.step()
+
+        if (total_steps - self.last_actor_training_log_step > self.learner_log_interval) or \
+                (self.last_actor_training_log_step == -1):
+            for key, value in critic_running_log.items():
+                self.logger.log_stat(key, np.mean(value), total_steps)
+            # self.logger.log_stat("q_max_first", critic_running_log["q_max_first"], total_steps)
+            # self.logger.log_stat("q_min_first", critic_running_log["q_min_first"], total_steps)
+            self.logger.log_stat("advantage_mean", (advantages * mask).sum().item() / mask.sum().item(), total_steps)
+            self.logger.log_stat("coma_loss", coma_loss.item(), total_steps)
+            self.logger.log_stat("agent_grad_norm", grad_norm, total_steps)
+            self.logger.log_stat("pi_max", (pi.max(dim=1)[0] * mask).sum().item() / mask.sum().item(), total_steps)
+
+            self.last_actor_training_log_step = total_steps

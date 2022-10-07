@@ -1,3 +1,4 @@
+import os
 from multiprocessing import Pipe, Process, connection
 from functools import partial
 import cloudpickle
@@ -25,7 +26,7 @@ class CloudpickleWrapper:
 
 
 def env_worker(parent: connection.Connection, wrapper: CloudpickleWrapper):
-    env = wrapper.obj()
+    env = wrapper.obj()  # 创建环境
     assert isinstance(env, MultiAgentEnv)
     while True:
         cmd, data = parent.recv()
@@ -166,7 +167,7 @@ class ParallelRunner:
         avail_env = [idx for idx, val in enumerate(terminated) if not val]
         episode_final_info = []
         # rollout
-        while len(avail_env) > 0:
+        while True:
             actions = self.controller.select_actions(self.batch, self.episode_step, self.steps, avail_env, test_mode)
             # actions 增加的维度在 episode_step 上
             # TODO: mark_filled 有什么用处？
@@ -175,6 +176,12 @@ class ParallelRunner:
             #         2. 若不存在 terminated[t] == True, 超时或是成功，最后一步的 Q(t+1) 需要计算
             #         mark_filled 可以不要，使用 mark_filled 可以方便计算
             self.batch.update({"actions": actions.unsqueeze(1)}, avail_env, self.episode_step, mark_filled=False)
+
+            # 更新下一步的 avail_env
+            # 在这里更新和判断跳出的原因是：即使上一步走完 terminated 了，也可能有必要记录这一步的 action（由超时导致的终止）
+            avail_env = [idx for idx, val in enumerate(terminated) if not val]
+            if len(avail_env) == 0:
+                break
 
             # 将 actions 下达给每个未 terminated 的子环境
             cpu_actions = actions.to("cpu").numpy()
@@ -221,8 +228,6 @@ class ParallelRunner:
             self.batch.update(post_transition_data, avail_env, self.episode_step, mark_filled=False)
             self.episode_step += 1
             self.batch.update(pre_transition_data, avail_env, self.episode_step, markfilled=True)
-            # 更新下一步的 avail_env
-            avail_env = [idx for idx, val in enumerate(terminated) if not val]
 
         # 记录信息
         if test_mode:
@@ -267,3 +272,13 @@ class ParallelRunner:
 
     def get_env_info(self):
         return self.env_info
+
+    def close_env(self):
+        for parent in self.parent_conns:
+            parent.send(("close", None))
+
+    def save_normalizer(self, path):
+        self.normalizer.save(os.path.join(path, "vec_normalize.pkl"))
+
+    def load_normalizer(self, path):
+        self.normalizer = VecNormalize.load(os.path.join(path, "vec_normalize.pkl"))
