@@ -8,7 +8,7 @@ import numpy as np
 import pandas as pd
 from robosuite.environments.robot_env import RobotEnv
 
-from multi_agent_env import MultiAgentEnv
+from .multi_agent_env import MultiAgentEnv
 
 
 class Direction(enum.IntEnum):
@@ -356,7 +356,8 @@ class DualArmEnv(MultiAgentEnv):
     def get_agent_action(self, a_id, action):
         """Construct the action for agent a_id."""
         avail_actions = self.get_avail_agent_actions(a_id)
-        assert avail_actions[action] == 1, "Agent {} cannot perform action {}".format(a_id, action)
+        if avail_actions[action] == 0:
+            assert avail_actions[action] == 1, "Agent {} cannot perform action {}".format(a_id, action)
 
         if action == 0:
             # stop

@@ -20,11 +20,11 @@ def config_sanity_check_and_adjust(config, log):
         log.warning("CUDA flag use_cuda was switched OFF automatically because no CUDA devices are available!")
     config["device"] = "cuda" if config["use_cuda"] else "cpu"
 
-    # test_n_episode 应该是 batch_size_run 的整数倍
-    if config["test_n_episode"] < config["batch_size_run"]:
-        config["test_n_episode"] = config["batch_size_run"]
+    # test_n_episodes 应该是 batch_size_run 的整数倍
+    if config["test_n_episodes"] < config["batch_size_run"]:
+        config["test_n_episodes"] = config["batch_size_run"]
     else:
-        config["test_n_episode"] = (config["test_n_episode"] // config["batch_size_run"]) * config["batch_size_run"]
+        config["test_n_episodes"] = (config["test_n_episodes"] // config["batch_size_run"]) * config["batch_size_run"]
 
 
 def evaluate_only(args, runner):
@@ -53,26 +53,11 @@ def run_sequential(args, logger):
         "terminated": {"vshape": (1,), "dtype": th.uint8},
     }
     groups = {
-        "agents": args.n_agents  # 如果是每个 agent 都拥有一份，shape 就应该增加一维
+        "agents": env_info["n_agents"]  # 如果是每个 agent 都拥有一份，shape 就应该增加一维
     }
     preprocess = {
-        "actions": ("actions_onehot", [OneHot(out_dim=args.n_actions)])  # 对 actions 需要进行预处理
+        "actions": ("actions_onehot", [OneHot(out_dim=env_info["n_actions"])])  # 对 actions 需要进行预处理
     }
-    # 创建 controller
-    controller = Controller(scheme, args.n_agents, args.agent_output_type,
-                            args.obs_last_action, args.obs_agent_id, args.mask_before_softmax,
-                            args.rnn_hidden_dim, args.n_actions, args.epsilon_start,
-                            args.epsilon_finish, args.epsilon_anneal_time, args.test_greedy)
-
-    # setup runner
-    runner.setup(scheme, groups, preprocess, controller)
-
-    # 创建 learner
-    learner = OffPGLearner(scheme, args.n_actions, args.n_agents, args.critic_hidden_dim, controller, logger,
-                           args.mixing_embed_dim, args.actor_learning_rate, args.critic_learning_rate,
-                           args.mixer_learning_rate, args.optim_alpha, args.optim_eps, args.gamma, args.td_lambda,
-                           args.grad_norm_clip, args.target_update_interval, args.learner_log_interval,
-                           args.tree_backup_step)
 
     on_buffer = ReplayBuffer(scheme, groups, args.on_buffer_size, env_info["episode_limit"]+1,
                              preprocess=preprocess, device="cpu" if args.buffer_cpu_only else args.device)
@@ -80,6 +65,22 @@ def run_sequential(args, logger):
                               preprocess=preprocess, device="cpu" if args.buffer_cpu_only else args.device)
     on_batch_size = args.on_batch_size
     off_batch_size = args.off_batch_size
+
+    # 创建 controller
+    controller = Controller(on_buffer.scheme, env_info["n_agents"], args.agent_output_type,
+                            args.obs_last_action, args.obs_agent_id, args.mask_before_softmax,
+                            args.rnn_hidden_dim, env_info["n_actions"], args.epsilon_start,
+                            args.epsilon_finish, args.epsilon_anneal_time, args.test_greedy)
+
+    # setup runner
+    runner.setup(scheme, groups, preprocess, controller)
+
+    # 创建 learner
+    learner = OffPGLearner(on_buffer.scheme, env_info["n_actions"], env_info["n_agents"], args.critic_hidden_dim,
+                           controller, logger, args.mixing_embed_dim, args.actor_learning_rate,
+                           args.critic_learning_rate, args.mixer_learning_rate, args.optim_alpha, args.optim_eps,
+                           args.gamma, args.td_lambda, args.grad_norm_clip, args.target_update_interval,
+                           args.learner_log_interval, args.tree_backup_step)
 
     # use cuda
     if args.use_cuda:
@@ -147,8 +148,10 @@ def run_sequential(args, logger):
         # train
         if on_buffer.can_sample(on_batch_size) and off_buffer.can_sample(off_batch_size):
             # train critic
-            on_buffer_samples = on_buffer.uni_sample(on_batch_size).to(args.device)
-            off_buffer_samples = off_buffer.uni_sample(off_batch_size).to(args.device)
+            on_buffer_samples = on_buffer.uni_sample(on_batch_size)
+            on_buffer_samples.to(args.device)
+            off_buffer_samples = off_buffer.uni_sample(off_batch_size)
+            off_buffer_samples.to(args.device)
             # 获得 samples 中最长 episode 的长度
             max_episode_length = max(on_buffer_samples.max_t_filled(), off_buffer_samples.max_t_filled())
             learner.train_critic(on_buffer_samples[:, :max_episode_length],
@@ -156,7 +159,8 @@ def run_sequential(args, logger):
                                  critic_running_log)
 
             # train actor
-            latest_samples = on_buffer.sample_latest(on_batch_size).to(args.device)
+            latest_samples = on_buffer.sample_latest(on_batch_size)
+            latest_samples.to(args.device)
             max_episode_length = latest_samples.max_t_filled()
             learner.train_actor(latest_samples[:, :max_episode_length], runner.steps, critic_running_log)
 
@@ -169,7 +173,7 @@ def run_sequential(args, logger):
             )
             last_time = time.time()
             last_test_timestep = runner.steps
-            for _ in range(args.test_n_episode // args.batch_size_run):
+            for _ in range(args.test_n_episodes // args.batch_size_run):
                 runner.rollout(test_mode=True)
 
         # save
@@ -177,7 +181,7 @@ def run_sequential(args, logger):
                 (runner.steps - last_model_save_timestep > args.save_model_interval) or (last_model_save_timestep == 0):
             last_model_save_timestep = runner.steps
             save_path = os.path.join(args.local_results_path, "models", args.unique_token, str(runner.steps))
-            os.mkdir(save_path)
+            os.makedirs(save_path, exist_ok=True)
             logger.info("Saving models to {}".format(save_path))
 
             controller.save_models(save_path)  # agent
@@ -206,7 +210,7 @@ def run(run_sacred, config, log):
 
     # 设置 tensorboard
     if config["use_tensorboard"]:
-        tb_log_dir = os.path.join(dirname(abspath(__file__)), "results/tb_logs/" + config["unique_token"])
+        tb_log_dir = os.path.join(dirname(dirname(abspath(__file__))), "results/tb_logs/" + config["unique_token"])
         logger.setup_tb(tb_log_dir)
     # 开启 sacred
     logger.setup_sacred(run_sacred)

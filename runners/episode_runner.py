@@ -136,14 +136,14 @@ class EpisodeRunner:
             self.batch.update(pre_transition_data, ts=self.episode_step)
             actions = self.controller.select_actions(self.batch, self.episode_step, self.steps, test_mode=True)
 
-            reward, terminated, env_info = self.env.step(actions.reshape(-1))
+            reward, terminated, info = self.env.step(actions.reshape(-1))
             self.env.render()
             episode_return += reward
 
             post_transition_data = {
                 "actions": actions,
                 "reward": [(reward,)],
-                "terminated": [(terminated != env_info.get("episode_limit", False),)],
+                "terminated": [(terminated and not info["timeout"],)],
             }
 
             self.batch.update(post_transition_data, ts=self.episode_step)

@@ -51,7 +51,7 @@ class Logger:
             # item = "{:.4f}".format(np.mean([x[1] for x in self.stats[k][-window:]]))
             item = "{:.4f}".format(self.average_list(k, window))
             log_str += "{:<25}{:>8}".format(k + ":", item)
-            log_str += "\n" if i % 4 == 0 else "\t"
+            log_str += "\n" if i % 3 == 0 else "\t"
         self.info(log_str)
 
     def average_list(self, k, window):

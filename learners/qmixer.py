@@ -12,17 +12,17 @@ class QMixer(th.nn.Module):
         self.state_dim = state_dim
         self.mixing_embed_dim = mixing_embed_dim
 
-        self.hyper_w1 = th.nn.Linear(self.state_dim, self.state_dim*self.n_agents)
-        self.hyper_w2 = th.nn.Linear(self.state_dim, self.state_dim)
+        self.hyper_w1 = th.nn.Linear(self.state_dim, self.mixing_embed_dim*self.n_agents)
+        self.hyper_w2 = th.nn.Linear(self.state_dim, self.mixing_embed_dim)
 
     def get_k(self, states, batch_size):
-        w1 = th.abs(self.hyper_w_1(states))
+        w1 = th.abs(self.hyper_w1(states))
         w1 = w1.reshape(-1, self.n_agents, self.mixing_embed_dim)
         w2 = th.abs(self.hyper_w2(states))
         w2 = w2.reshape(-1, self.mixing_embed_dim, 1)
         k = th.bmm(w1, w2).view(batch_size, -1, self.n_agents)
         k = k / th.sum(k, dim=2, keepdim=True)
-        # TODO: 这里比源代码多了个 detach，是否会出问题？
+        # IMPROVED: 比源代码多了个 detach，应该是合理的
         return k.detach()
 
     def forward(self, q_locals, states, batch_size):
@@ -41,5 +41,5 @@ class QMixer(th.nn.Module):
         k = th.bmm(w1, w2)
         k = k / th.sum(k, dim=1, keepdim=True)
 
-        # TODO: 只有k，缺少 b
+        # IMPROVING: 只有k，缺少 b
         return th.bmm(q_locals, k).reshape(batch_size, -1, 1)

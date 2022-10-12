@@ -26,37 +26,30 @@ class DecayThenFlatSchedule:
 
 class MultinomialActionSelector:
 
-    def __init__(self, epsilon_start, epsilon_finish, epsilon_anneal_time, test_greedy):
-        self.epsilon = None
+    def __init__(self, epsilon_start, epsilon_finish, epsilon_anneal_time):
         self.epsilon_schedule = DecayThenFlatSchedule(epsilon_start, epsilon_finish, epsilon_anneal_time, "linear")
-        # test 参数
-        self.test_greedy = test_greedy
+        self.epsilon = self.epsilon_schedule.eval(0)
 
-    def select_actions(self, controller_outputs, avail_actions, t_env, test_mode=False):
+    def select_actions(self, controller_outputs, avail_actions, t_env, greedy):
         # 将不可行的 action 剔除
         feasible_actions = controller_outputs.clone()
         feasible_actions[avail_actions == 0.0] = 0.0
         # 得到 epsilon
         self.epsilon = self.epsilon_schedule.eval(t_env)
 
-        if test_mode and self.test_greedy:
-            # greedy
+        if greedy:
+            # greedy policy
             picked_actions = feasible_actions.max(dim=2)[1]
         else:
-            # epsilon-greedy
+            # epsilon-greedy policy
             picked_actions = Categorical(feasible_actions).sample()
-            random_actions = Categorical(avail_actions).sample()
-            # picked_actions 中每个 action 被选择的概率为 1 - epsilon
-            # TODO: 这样是不是打破了动作之间的关联性？
-            random_numbers = th.rand_like(controller_outputs[:, :, 0])
-            select_random_factor = random_numbers < self.epsilon
-
-            picked_actions = select_random_factor * random_actions + (1-select_random_factor)*picked_actions
 
         # 确保选择的 action 都是可行的
         # unsqueeze 的作用是在扩展指定位置的维度 -- 1
         # squeeze 的作用是把 tensor 中大小为 1 的维度
         # gather 把指定下标的数据从源数据中提取出来
         assert (th.gather(avail_actions, dim=2, index=picked_actions.unsqueeze(2)) > 0.99).all()
-
         return picked_actions
+
+    def get_epsilon(self):
+        return self.epsilon

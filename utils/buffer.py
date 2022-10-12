@@ -261,8 +261,10 @@ class ReplayBuffer(EpisodeBatch):
 
     def sample_latest(self, batch_size):
         assert self.can_sample(batch_size)
-        if self.buffer_index - batch_size < 0:
-            return self[0: self.buffer_index].extend(self[self.buffer_index-batch_size:])
+        if self.buffer_index < batch_size:
+            index = list(range(self.buffer_size - (batch_size - self.buffer_index), self.buffer_size))
+            index.extend(list(range(0, self.buffer_index)))
+            return self[index]
         else:
             # Return the latest
             return self[self.buffer_index - batch_size: self.buffer_index]
