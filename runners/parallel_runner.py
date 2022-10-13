@@ -265,7 +265,10 @@ class ParallelRunner:
             self.logger.log_stat("test_reward_std", self.test_reward.var, self.steps)
             for k, v in self.test_stats.items():
                 if k is not "n_episodes":
-                    self.logger.log_stat("test_"+k+"_every_episode", v/self.test_stats["n_episodes"], self.steps)
+                    if k is "steps":
+                        self.logger.log_stat("test_" + k + "_average", v / self.test_stats["n_episodes"], self.steps)
+                    else:
+                        self.logger.log_stat("test_" + k + "_rate", v/self.test_stats["n_episodes"], self.steps)
             # 清空记录
             self.test_stats.clear()
             self.test_reward.clear()
@@ -276,7 +279,10 @@ class ParallelRunner:
             self.logger.log_stat("epsilon", self.controller.action_selector.epsilon, self.steps)
             for k, v in self.train_stats.items():
                 if k is not "n_episodes":
-                    self.logger.log_stat("train_"+k+"_every_episode", v/self.train_stats["n_episodes"], self.steps)
+                    if k is "steps":
+                        self.logger.log_stat("train_" + k + "_average", v/self.train_stats["n_episodes"], self.steps)
+                    else:
+                        self.logger.log_stat("train_" + k + "_rate", v/self.train_stats["n_episodes"], self.steps)
             # 清空记录
             self.train_stats.clear()
             self.train_reward.clear()
