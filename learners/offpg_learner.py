@@ -7,6 +7,7 @@ from torch.nn.utils import clip_grad_norm
 from .offpg_critic import OffPGCritic
 from .qmixer import QMixer
 from MARLLib.utils.buffer import EpisodeBatch
+from MARLLib.utils.function import plot_compute_graph
 
 
 class OffPGLearner:
@@ -254,6 +255,14 @@ class OffPGLearner:
             q_total_target = g_lambda[:, t:t+1, :]
             td_error = (q_total - q_total_target) * mask_t
             critic_loss = (td_error ** 2).sum() / mask_t.sum()
+
+            # # 打印计算图
+            # params_dict = dict()
+            # params_dict.update(dict(self.controller.agent.named_parameters()))
+            # params_dict.update(dict(self.mixer.named_parameters()))
+            # params_dict.update(dict(self.critic.named_parameters()))
+            # plot_compute_graph(critic_loss, params_dict)
+
             # IMPROVING: 源代码中这里还有一个 goal_loss，不知道是干什么用的，源代码也没有用上这一项
             self.critic_optimiser.zero_grad()
             self.mixer_optimiser.zero_grad()
@@ -294,7 +303,7 @@ class OffPGLearner:
         device = batch.device
 
         state = batch["state"]  # state: (batch_size, max_episode_length, state_dim)
-        # avail_actions = batch["avail_actions"]
+        avail_actions = batch["avail_actions"][:, :-1, :]
         obs = batch["obs"]
 
         # 这里与 train_critic 不同的原因是为了方便 log_pi_selected 的计算
@@ -315,10 +324,10 @@ class OffPGLearner:
         self.controller.init_hidden(batch_size)
         action_probs = [self.controller.forward(batch, t) for t in range(max_episode_length-1)]
         action_probs = th.stack(action_probs, dim=1)
-        # # 若 mask_before_softmax == True，无需以下操作
-        # action_probs[avail_actions==0] = 0
-        # action_probs = action_probs / action_probs.sum(dim=-1, keepdim=True) # -1: 最后一维
-        # action_probs[avail_actions==0] = 0
+        # 若 mask_before_softmax == True，无需以下操作
+        action_probs[avail_actions == 0] = 0
+        action_probs = action_probs / action_probs.sum(dim=-1, keepdim=True)  # -1: 最后一维
+        action_probs[avail_actions == 0] = 0
 
         # 计算 baseline: 一维向量, batch_size * max_episode_length * n_agents
         baseline = th.sum(action_probs*q_locals, dim=-1).reshape(-1).detach()
@@ -335,7 +344,14 @@ class OffPGLearner:
 
         # 计算 coma loss
         coefficient = self.mixer.get_k(state[:, :-1, :], batch_size).reshape(-1)
-        coma_loss = (log_pi_selected * coefficient * advantages * mask).sum() / mask.sum()
+        coma_loss = -(log_pi_selected * coefficient * advantages * mask).sum() / mask.sum()
+
+        # # 打印计算图
+        # params_dict = dict()
+        # params_dict.update(dict(self.controller.agent.named_parameters()))
+        # params_dict.update(dict(self.mixer.named_parameters()))
+        # params_dict.update(dict(self.critic.named_parameters()))
+        # plot_compute_graph(coma_loss, params_dict)
 
         self.agent_optimiser.zero_grad()
         coma_loss.backward()
