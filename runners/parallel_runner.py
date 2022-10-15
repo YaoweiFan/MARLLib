@@ -1,5 +1,4 @@
 import os
-import torch as th
 from multiprocessing import Pipe, Process, connection
 from functools import partial
 import cloudpickle
@@ -37,7 +36,6 @@ def env_worker(parent: connection.Connection, wrapper: CloudpickleWrapper):
             parent.send(
                 {
                     "state": env.get_state(),
-                    "avail_actions": env.get_avail_actions(),
                     "obs": env.get_obs(),
                     "reward": reward,
                     "terminated": terminated,
@@ -50,7 +48,6 @@ def env_worker(parent: connection.Connection, wrapper: CloudpickleWrapper):
             parent.send(
                 {
                     "state": env.get_state(),
-                    "avail_actions": env.get_avail_actions(),
                     "obs": env.get_obs()
                 }
             )
@@ -144,7 +141,10 @@ class ParallelRunner:
         for parent in self.parent_conns:
             parent.send(("reset", None))
 
-        pre_transition_data = {"state": [], "avail_actions": [], "obs": []}
+        pre_transition_data = {
+            "state": [],
+            "obs": []
+        }
         for parent in self.parent_conns:
             data = parent.recv()
             # normalize obs and state
@@ -152,10 +152,8 @@ class ParallelRunner:
             state_normalized = self.normalizer.normalize_state(data["state"], test_mode)
             pre_transition_data["obs"].append(obs_normalized)
             pre_transition_data["state"].append(state_normalized)
-            pre_transition_data["avail_actions"].append(data["avail_actions"])
 
         self.batch.update(pre_transition_data, ts=0)
-
         self.episode_step = 0
 
     def rollout(self, test_mode):
@@ -169,14 +167,15 @@ class ParallelRunner:
         episode_final_info = []
         # rollout
         while True:
-            actions = self.controller.select_actions(self.batch, self.episode_step, self.steps, avail_env, test_mode)
+            actions, log_prob = self.controller.forward(self.batch, self.episode_step, avail_env, deterministic=False)
             # actions 增加的维度在 episode_step 上
             # QUESTION: mark_filled 有什么用处？
             # ANSWER: terminated 用来表明环境因失败终止
             #         1. 若存在 terminated[t] == True, 那 t 就是最后一步且走完第 t 步环境失败，最后一步的 Q(t+1) 不需要计算
             #         2. 若不存在 terminated[t] == True, 超时或是成功，最后一步的 Q(t+1) 需要计算
             #         mark_filled 可以不要，使用 mark_filled 可以方便计算
-            self.batch.update({"actions": actions.unsqueeze(1)}, avail_env, self.episode_step, mark_filled=False)
+            self.batch.update({"actions": actions}, avail_env, self.episode_step, mark_filled=False)
+            self.batch.update({"log_prob": log_prob}, avail_env, self.episode_step, mark_filled=False)
             last_avail_env = avail_env.copy()
 
             # 更新下一步的 avail_env
@@ -185,7 +184,7 @@ class ParallelRunner:
             if len(avail_env) == 0:
                 break
             # 将 actions 下达给每个未 terminated 的子环境
-            cpu_actions = actions.to("cpu").numpy()
+            cpu_actions = actions.detach().to("cpu").numpy()
             # 过滤掉失效的 actions
             for avail_env_idx in avail_env:
                 idx = last_avail_env.index(avail_env_idx)
@@ -195,11 +194,6 @@ class ParallelRunner:
 
             action_idx = 0
             for idx in avail_env:
-                # ac = self.batch["avail_actions"][:, self.episode_step][idx]
-                # index = actions[action_idx].unsqueeze(1)
-                # if not (th.gather(ac, dim=1, index=index) > 0.99).all():
-                #     print("GG")
-
                 self.parent_conns[idx].send(("step", cpu_actions[action_idx]))
                 action_idx += 1
 
@@ -211,7 +205,6 @@ class ParallelRunner:
             # Data for the next step we will insert in order to select an action
             pre_transition_data = {
                 "state": [],
-                "avail_actions": [],
                 "obs": []
             }
             # 接收子进程返回的信息
@@ -230,7 +223,6 @@ class ParallelRunner:
                 # 更新下一步的 pre 信息
                 pre_transition_data["obs"].append(self.normalizer.normalize_obs(data["obs"], test_mode))
                 pre_transition_data["state"].append(self.normalizer.normalize_state(data["state"], test_mode))
-                pre_transition_data["avail_actions"].append(data["avail_actions"])
 
                 episode_reward[idx] += data["reward"]
                 episode_length[idx] += 1

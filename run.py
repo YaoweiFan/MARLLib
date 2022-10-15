@@ -10,7 +10,6 @@ from MARLLib.agents.controller import Controller
 from MARLLib.learners.offpg_learner import OffPGLearner
 from MARLLib.utils.logging import Logger
 from MARLLib.utils.buffer import ReplayBuffer
-from MARLLib.utils.preprocess import OneHot
 from MARLLib.utils.timehelper import time_left, time_str
 
 
@@ -47,17 +46,15 @@ def run_sequential(args, logger):
     scheme = {
         "state": {"vshape": env_info["state_shape"]},
         "obs": {"vshape": env_info["obs_shape"], "group": "agents"},
-        "actions": {"vshape": (1,), "group": "agents", "dtype": th.long},
-        "avail_actions": {"vshape": (env_info["n_actions"],), "group": "agents", "dtype": th.int},
+        "actions": {"vshape": env_info["action_dim"], "group": "agents"},
+        "log_prob": {"vshape": (1,), "group": "agents"},
         "reward": {"vshape": (1,)},
         "terminated": {"vshape": (1,), "dtype": th.uint8},
     }
     groups = {
         "agents": env_info["n_agents"]  # 如果是每个 agent 都拥有一份，shape 就应该增加一维
     }
-    preprocess = {
-        "actions": ("actions_onehot", [OneHot(out_dim=env_info["n_actions"])])  # 对 actions 需要进行预处理
-    }
+    preprocess = {}
 
     on_buffer = ReplayBuffer(scheme, groups, args.on_buffer_size, env_info["episode_limit"]+1,
                              preprocess=preprocess, device="cpu" if args.buffer_cpu_only else args.device)
@@ -67,16 +64,14 @@ def run_sequential(args, logger):
     off_batch_size = args.off_batch_size
 
     # 创建 controller
-    controller = Controller(on_buffer.scheme, env_info["n_agents"], args.agent_output_type,
-                            args.obs_last_action, args.obs_agent_id, args.mask_before_softmax,
-                            args.rnn_hidden_dim, env_info["n_actions"], args.epsilon_start,
-                            args.epsilon_finish, args.epsilon_anneal_time, args.test_greedy)
+    controller = Controller(on_buffer.scheme, env_info["n_agents"], args.obs_last_action, args.obs_agent_id,
+                            args.rnn_hidden_dim, env_info["action_dim"], args.log_std_init)
 
     # setup runner
     runner.setup(scheme, groups, preprocess, controller)
 
     # 创建 learner
-    learner = OffPGLearner(on_buffer.scheme, env_info["n_actions"], env_info["n_agents"], args.critic_hidden_dim,
+    learner = OffPGLearner(on_buffer.scheme, env_info["action_dim"], env_info["n_agents"], args.critic_hidden_dim,
                            controller, logger, args.mixing_embed_dim, args.actor_learning_rate,
                            args.critic_learning_rate, args.mixer_learning_rate, args.optim_alpha, args.optim_eps,
                            args.gamma, args.td_lambda, args.grad_norm_clip, args.target_update_interval,
@@ -134,10 +129,8 @@ def run_sequential(args, logger):
             "td_error_abs": [],
             "q_total_target_mean": [],
             "q_total_mean": [],
-            "q_locals_max_mean": [],
-            "q_locals_min_mean": [],
-            "q_locals_max_var": [],
-            "q_locals_min_var": []
+            "q_locals_mean": [],
+            "q_locals_var": []
         }
 
         # rollout， 每个子进程走完一个 episode

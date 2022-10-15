@@ -10,7 +10,6 @@ reward_scale: 3.0
 episode_limit: 100
 obs_timestep_number: False
 debug: False
-
 # 任务相关
 joint_pos_size: 7
 joint_vel_size: 7
@@ -22,16 +21,9 @@ peg_to_hole_size: 3
 robot_state_size: 38
 object_state_size: 19
 n_agents: 2
-n_actions: 7
+action_dim: 3
 obs_choose: "all"
 trajectory_data_path: "data/trajectory.csv"
-ms_xl: -0.25
-ms_xh: 0.25
-ms_yl: -0.3
-ms_yh: 0.3
-ms_zl: 0
-ms_zh: 1.5
-
 # Mujoco 相关
 has_renderer: False
 has_offscreen_renderer: False
@@ -41,5 +33,3 @@ control_freq: 20
 camera_name: "frontview"
 camera_heights: 512
 camera_widths: 512
-
-
