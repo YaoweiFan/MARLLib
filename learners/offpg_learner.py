@@ -339,7 +339,7 @@ class OffPGLearner:
         # 计算 log_pi_selected
         pi = action_probs.reshape(-1, self.n_actions)  # (batch_size * max_episode_length * n_agents, n_actions)
         pi_selected = th.gather(pi, dim=1, index=actions.reshape(-1, 1)).squeeze(1)  # 一维向量
-        pi_selected[mask == 0] = 0
+        pi_selected[mask == 0] = 1.0
         log_pi_selected = th.log(pi_selected)
 
         # 计算 coma loss
