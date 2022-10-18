@@ -268,7 +268,6 @@ class ParallelRunner:
         if not test_mode and (self.steps - self.log_steps >= self.runner_log_interval):
             self.logger.log_stat("reward_mean", self.train_reward.mean, self.steps)
             self.logger.log_stat("reward_std", self.train_reward.var, self.steps)
-            self.logger.log_stat("epsilon", self.controller.action_selector.epsilon, self.steps)
             for k, v in self.train_stats.items():
                 if k is not "n_episodes":
                     if k is "steps":

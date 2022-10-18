@@ -3,8 +3,8 @@ runner: "parallel" # Runs 1 env for an episode
 mac: "basic_mac" # Basic controller
 env: "dualarmcontinuous" # Environment name
 env_args: {} # Arguments for the environment
-batch_size_run: 8 # Number of environments to run in parallel
-test_n_episodes: 24 # Number of episodes to test for (最好是 batch_size_run 的倍数)
+batch_size_run: 16 # Number of environments to run in parallel
+test_n_episodes: 32 # Number of episodes to test for (最好是 batch_size_run 的倍数)
 test_interval: 20000 # Test after {} timesteps have passed
 test_greedy: False # Use greedy evaluation (if False, will set epsilon floor to 0
 log_interval: 20000 # Log summary of stats after every {} timesteps
@@ -36,7 +36,7 @@ mixer_learning_rate: 0.0001 # Learning rate for mixer
 optim_alpha: 0.99 # RMSProp alpha
 optim_eps: 0.00001 # RMSProp epsilon
 grad_norm_clip: 20 # Reduce magnitude of gradients above this L2 norm
-target_update_interval: 600 # update the target network every {} training steps
+target_update_interval: 2000 # update the target network every {} training steps
 tree_backup_step: 5 # steps for tree back up diagram  (adjustable based on # of agents)
 td_lambda: 0.8
 tb_lambda: 0.93
