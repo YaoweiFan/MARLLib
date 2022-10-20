@@ -42,12 +42,11 @@ def run_sequential(args, logger):
                                  args.env_args)
     env_info = runner.get_env_info()
 
-    # 创建 on_policy buffer 和 off_policy buffer
+    # 创建 off_policy buffer
     scheme = {
         "state": {"vshape": env_info["state_shape"]},
         "obs": {"vshape": env_info["obs_shape"], "group": "agents"},
         "actions": {"vshape": env_info["action_dim"], "group": "agents"},
-        "log_prob": {"vshape": (1,), "group": "agents"},
         "reward": {"vshape": (1,)},
         "terminated": {"vshape": (1,), "dtype": th.uint8},
     }
@@ -56,26 +55,23 @@ def run_sequential(args, logger):
     }
     preprocess = {}
 
-    on_buffer = ReplayBuffer(scheme, groups, args.on_buffer_size, env_info["episode_limit"]+1,
-                             preprocess=preprocess, device="cpu" if args.buffer_cpu_only else args.device)
-    # off_buffer = ReplayBuffer(scheme, groups, args.off_buffer_size, env_info["episode_limit"]+1,
-    #                           preprocess=preprocess, device="cpu" if args.buffer_cpu_only else args.device)
-    on_batch_size = args.on_batch_size
+    off_buffer = ReplayBuffer(scheme, groups, args.off_buffer_size, env_info["episode_limit"]+1,
+                              preprocess=preprocess, device="cpu" if args.buffer_cpu_only else args.device)
     off_batch_size = args.off_batch_size
 
     # 创建 controller
-    controller = Controller(on_buffer.scheme, env_info["n_agents"], args.obs_last_action, args.obs_agent_id,
-                            args.rnn_hidden_dim, env_info["action_dim"], args.log_std_init)
+    controller = Controller(off_buffer.scheme, env_info["n_agents"], args.obs_last_action, args.obs_agent_id,
+                            args.actor_hidden_dim, env_info["action_dim"], args.log_std_init)
 
     # setup runner
     runner.setup(scheme, groups, preprocess, controller)
 
     # 创建 learner
-    learner = OffPGLearner(on_buffer.scheme, env_info["action_dim"], env_info["n_agents"], args.critic_hidden_dim,
+    learner = OffPGLearner(off_buffer.scheme, env_info["action_dim"], env_info["n_agents"], args.critic_hidden_dim,
                            controller, logger, args.mixing_embed_dim, args.actor_learning_rate,
                            args.critic_learning_rate, args.mixer_learning_rate, args.optim_alpha, args.optim_eps,
                            args.gamma, args.td_lambda, args.grad_norm_clip, args.target_update_interval,
-                           args.learner_log_interval, args.tree_backup_step)
+                           args.learner_log_interval, args.tree_backup_step, args.soft_update_alpha)
 
     # use cuda
     if args.use_cuda:
@@ -123,39 +119,31 @@ def run_sequential(args, logger):
 
     logger.info("Beginning training for {} timesteps ...".format(args.t_max))
     while runner.steps <= args.t_max:
-        critic_running_log = {
+        training_log = {
             "critic_loss": [],
             "critic_grad_norm": [],
             "td_error_abs": [],
-            "q_total_target_mean": [],
+            "target_q_total_mean": [],
             "q_total_mean": [],
             "q_locals_mean": [],
-            "q_locals_var": []
+            "q_locals_var": [],
+            "actor_loss": [],
+            "agent_grad_norm": []
         }
 
         # rollout， 每个子进程走完一个 episode
         episode_batch = runner.rollout(test_mode=False)
-        on_buffer.insert_episode_batch(episode_batch)
-        # off_buffer.insert_episode_batch(episode_batch)
+        off_buffer.insert_episode_batch(episode_batch)
 
         # train
-        if on_buffer.can_sample(on_batch_size):
+        if off_buffer.can_sample(off_batch_size):
             # train critic
-            on_buffer_samples = on_buffer.uni_sample(on_batch_size)
-            on_buffer_samples.to(args.device)
-            # off_buffer_samples = off_buffer.uni_sample(off_batch_size)
-            # off_buffer_samples.to(args.device)
-            # 获得 samples 中最长 episode 的长度
-            max_episode_length = max(on_buffer_samples.max_t_filled())
-            learner.train_critic(on_buffer_samples[:, :max_episode_length],
-                                 # off_buffer_samples[:, :max_episode_length],
-                                 critic_running_log=critic_running_log)
+            off_buffer_samples = off_buffer.uni_sample(off_batch_size)
+            off_buffer_samples.to(args.device)
 
-            # train actor
-            latest_samples = on_buffer.sample_latest(on_batch_size)
-            latest_samples.to(args.device)
-            max_episode_length = latest_samples.max_t_filled()
-            learner.train_actor(latest_samples[:, :max_episode_length], runner.steps, critic_running_log)
+            # 获得 samples 中最长 episode 的长度
+            max_episode_length = max(off_buffer_samples.max_t_filled())
+            learner.train(off_buffer_samples[:, :max_episode_length], runner.steps, training_log=training_log)
 
         # test
         if (runner.steps - last_test_timestep > args.test_interval) or (last_test_timestep == 0):

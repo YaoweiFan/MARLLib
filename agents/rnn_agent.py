@@ -22,3 +22,7 @@ class RNNAgent(nn.Module):
         h_out = self.rnn(fc1_output, h_in)
         output = self.fc2(h_out)
         return output, h_out
+
+    def soft_update(self, source, alpha):
+        for target_param, source_param in zip(self.parameters(), source.parameters()):
+            target_param.data.copy_((1 - alpha) * target_param.data + alpha * source_param.data)

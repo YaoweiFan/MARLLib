@@ -29,7 +29,7 @@ gamma: 0.99
 on_batch_size: 16 # Number of episodes to train on
 on_buffer_size: 32 # Size of the replay buffer
 off_batch_size: 32  # Number of off-policy episodes to train on
-off_buffer_size: 5000 # size of the off-policy buffer
+off_buffer_size: 10000 # size of the off-policy buffer
 actor_learning_rate: 0.0005 # Learning rate for agents
 critic_learning_rate: 0.0001 # Learning rate for critics
 mixer_learning_rate: 0.0001 # Learning rate for mixer
@@ -86,3 +86,7 @@ record_param: False  # record controller network or not
 test: False  # test or train
 
 log_std_init: 0.0  # gaussian 采样方差
+
+soft_update_alpha: 0.01 # 软更新系数
+
+actor_hidden_dim: 64

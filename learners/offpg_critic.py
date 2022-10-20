@@ -36,4 +36,8 @@ class OffPGCritic(th.nn.Module):
         fc_a1_outputs = relu(self.fc_a1(combined))
         a = self.fc_a2(fc_a1_outputs)
 
-        return v+a, v  # Q(s, a), V(s)
+        return v+a  # Q(s, a)
+
+    def soft_update(self, source, alpha):
+        for target_param, source_param in zip(self.parameters(), source.parameters()):
+            target_param.data.copy_((1 - alpha) * target_param.data + alpha * source_param.data)

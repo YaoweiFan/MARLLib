@@ -43,3 +43,7 @@ class QMixer(th.nn.Module):
 
         # IMPROVING: 只有k，缺少 b
         return th.bmm(q_locals, k).reshape(batch_size, -1, 1)
+
+    def soft_update(self, source, alpha):
+        for target_param, source_param in zip(self.parameters(), source.parameters()):
+            target_param.data.copy_((1 - alpha) * target_param.data + alpha * source_param.data)
