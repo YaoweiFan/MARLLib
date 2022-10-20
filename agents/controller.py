@@ -70,6 +70,7 @@ class Controller:
         self.log_std = self.log_std.to("cuda")
 
     def parameters(self):
+        # TODO: 如果是 no deterministic 的话要把 log_std 也加入进去，实质上就是要把 (string, Parameter) 加入迭代容器中去
         return self.agent.parameters()
 
     def save_models(self, path):

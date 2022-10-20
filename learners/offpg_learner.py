@@ -164,7 +164,7 @@ class OffPGLearner:
         # # 打印计算图
         # params_dict = dict()
         # params_dict.update(dict(self.controller.agent.named_parameters()))
-        # params_dict.update(dict(self.controller.log_std))
+        # params_dict.update({"log_std": self.controller.log_std})
         # params_dict.update(dict(self.mixer.named_parameters()))
         # params_dict.update(dict(self.critic.named_parameters()))
         # plot_compute_graph(critic_loss, params_dict)
@@ -189,6 +189,12 @@ class OffPGLearner:
         training_log["q_locals_var"].append(
             (th.var(q_locals, dim=2, keepdim=True) * mask).sum().item() / mask_num.item())
 
+        self.training_count += 1
+
+        # critic、mixer 更新两次，actor 更新一次、target 更新一次
+        if self.training_count % 2 == 0:
+            return
+
         # actor --> critic
         action = []
         for t in range(max_episode_length):
@@ -206,7 +212,7 @@ class OffPGLearner:
         # # 打印计算图
         # params_dict = dict()
         # params_dict.update(dict(self.controller.agent.named_parameters()))
-        # params_dict.update(dict(self.controller.log_std))
+        # params_dict.update({"log_std": self.controller.log_std})
         # params_dict.update(dict(self.mixer.named_parameters()))
         # params_dict.update(dict(self.critic.named_parameters()))
         # plot_compute_graph(actor_loss, params_dict)
@@ -221,11 +227,9 @@ class OffPGLearner:
         training_log["actor_loss"].append(actor_loss.item())
         training_log["agent_grad_norm"].append(grad_norm)
 
-        self.training_count += 1
-
         if (self.training_count - self.last_training_log_count > self.target_update_interval) or \
                 (self.last_training_log_count == -1):
-            # soft update target network
+            # 每经过一定的训练次数，soft update target network
             self.target_critic.soft_update(self.critic, self.soft_update_alpha)
             self.target_mixer.soft_update(self.mixer, self.soft_update_alpha)
             self.target_controller.soft_update(self.controller, self.soft_update_alpha)
@@ -235,6 +239,7 @@ class OffPGLearner:
 
         if (total_steps - self.last_training_log_step > self.learner_log_interval) or \
                 (self.last_training_log_step == -1):
+            # 每经过一定的训练步数，打印训练信息
             for key, value in training_log.items():
                 self.logger.log_stat(key, sum(value)/len(value), total_steps)
             self.last_training_log_step = total_steps
