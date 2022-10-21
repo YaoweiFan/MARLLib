@@ -1,6 +1,7 @@
 import os
 import torch as th
 import numpy as np
+from itertools import chain
 
 from MARLLib.utils.distributions import DiagGaussianDistribution
 from .rnn_agent import RNNAgent
@@ -88,7 +89,10 @@ class Controller:
         self.log_std = self.log_std.to("cuda")
 
     def parameters(self):
-        return self.agent.parameters()
+        return chain(self.agent.parameters(), self.distribution_param())
+
+    def distribution_param(self):
+        yield self.log_std
 
     def save_models(self, path):
         th.save(self.agent.state_dict(), "{}/agent.th".format(path))

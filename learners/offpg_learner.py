@@ -143,7 +143,7 @@ class OffPGLearner:
 
         # inputs: (batch_size, episode_steps, n_agents, state_dim+obs_dim+n_agents)
         inputs = self._build_critic_inputs(state, obs, batch_size, max_episode_length, device)
-        # log_prob: (batch_size, episode_steps, 1)
+        # joint_action_log_prob: (batch_size, episode_steps-1, 1)
         joint_action_log_prob = log_prob.squeeze(3).sum(dim=2, keepdim=True)[:, :-1, :]
         joint_action_prob = th.exp(joint_action_log_prob).detach()
 
@@ -154,11 +154,13 @@ class OffPGLearner:
         target_expected_q_locals = target_expected_q_locals.detach()
         # 计算 expected_q_total
         expected_q_total = self.target_mixer(target_expected_q_locals.squeeze(3), state, batch_size).detach()
+        expected_q_total[:, -1, :] = expected_q_total[:, -1, :] * (1 - th.sum(terminated, dim=1))
         expected_q_total[:, :-1, :] = expected_q_total[:, :-1, :] * mask
 
         # 计算 target_q_total
         target_q_locals = target_q_locals.squeeze(3)
         target_q_total = self.target_mixer(target_q_locals, state, batch_size).detach()
+        # 不需要处理 target_q_total 最后一个 mask 与否，因为用不到
         target_q_total[:, :-1, :] = target_q_total[:, :-1, :] * mask
 
         # delta 对于每个 episode 的有效区间为: [0, terminated_step]
@@ -250,6 +252,7 @@ class OffPGLearner:
             # # 打印计算图
             # params_dict = dict()
             # params_dict.update(dict(self.controller.agent.named_parameters()))
+            # params_dict.update({"log_std": self.controller.log_std})
             # params_dict.update(dict(self.mixer.named_parameters()))
             # params_dict.update(dict(self.critic.named_parameters()))
             # plot_compute_graph(critic_loss, params_dict)
@@ -330,6 +333,7 @@ class OffPGLearner:
         # # 打印计算图
         # params_dict = dict()
         # params_dict.update(dict(self.controller.agent.named_parameters()))
+        # params_dict.update({"log_std": self.controller.log_std})
         # params_dict.update(dict(self.mixer.named_parameters()))
         # params_dict.update(dict(self.critic.named_parameters()))
         # plot_compute_graph(coma_loss, params_dict)

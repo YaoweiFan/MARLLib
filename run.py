@@ -147,9 +147,8 @@ def run_sequential(args, logger):
             # off_buffer_samples.to(args.device)
             # 获得 samples 中最长 episode 的长度
             max_episode_length = max(on_buffer_samples.max_t_filled())
-            learner.train_critic(on_buffer_samples[:, :max_episode_length],
-                                 # off_buffer_samples[:, :max_episode_length],
-                                 critic_running_log=critic_running_log)
+            # stochastic continuous 训练 critic 时暂时不考虑使用 off_buffer，off_buffer 的代码存在问题（评估时要采用新策略）
+            learner.train_critic(on_buffer_samples[:, :max_episode_length], critic_running_log=critic_running_log)
 
             # train actor
             latest_samples = on_buffer.sample_latest(on_batch_size)
