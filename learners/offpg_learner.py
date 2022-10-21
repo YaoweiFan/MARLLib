@@ -160,12 +160,13 @@ class OffPGLearner:
 
         # 计算 expected_q_total
         expected_q_total = self.target_mixer(th.sum(target_q_locals * action_probs, dim=3), state, batch_size).detach()
-        # expected_q_total[:, -1, :] = expected_q_total[:, -1, :] * (1 - th.sum(terminated, dim=1))
+        expected_q_total[:, -1, :] = expected_q_total[:, -1, :] * (1 - th.sum(terminated, dim=1))
         expected_q_total[:, :-1, :] = expected_q_total[:, :-1, :] * mask
 
         # 计算 target_q_total
         target_q_locals = th.gather(target_q_locals, dim=3, index=actions).squeeze(3)
         target_q_total = self.target_mixer(target_q_locals, state, batch_size).detach()
+        # 不需要处理 target_q_total 最后一个 mask 与否，因为用不到
         # target_q_total[:, -1, :] = target_q_total[:, -1, :] * (1 - th.sum(terminated, dim=1))
         target_q_total[:, :-1, :] = target_q_total[:, :-1, :] * mask
 
