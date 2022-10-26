@@ -128,7 +128,10 @@ def run_sequential(args, logger):
             "q_locals_mean": [],
             "q_locals_var": [],
             "actor_loss": [],
-            "agent_grad_norm": []
+            "agent_grad_norm": [],
+            "action_x_mean": [],
+            "action_y_mean": [],
+            "action_z_mean": []
         }
 
         # rollout， 每个子进程走完一个 episode

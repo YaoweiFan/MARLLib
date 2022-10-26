@@ -189,6 +189,13 @@ class OffPGLearner:
         training_log["q_locals_var"].append(
             (th.var(q_locals, dim=2, keepdim=True) * mask).sum().item() / mask_num.item())
 
+        training_log["action_x_mean"].append(
+            (th.mean(actions[:, :, :, 0], dim=2, keepdim=True) * mask).sum().item() / mask_num.item())
+        training_log["action_y_mean"].append(
+            (th.mean(actions[:, :, :, 1], dim=2, keepdim=True) * mask).sum().item() / mask_num.item())
+        training_log["action_z_mean"].append(
+            (th.mean(actions[:, :, :, 2], dim=2, keepdim=True) * mask).sum().item() / mask_num.item())
+
         self.training_count += 1
 
         # critic、mixer 更新两次，actor 更新一次、target 更新一次
@@ -227,15 +234,15 @@ class OffPGLearner:
         training_log["actor_loss"].append(actor_loss.item())
         training_log["agent_grad_norm"].append(grad_norm)
 
-        if (self.training_count - self.last_training_log_count > self.target_update_interval) or \
-                (self.last_training_log_count == -1):
-            # 每经过一定的训练次数，soft update target network
-            self.target_critic.soft_update(self.critic, self.soft_update_alpha)
-            self.target_mixer.soft_update(self.mixer, self.soft_update_alpha)
-            self.target_controller.soft_update(self.controller, self.soft_update_alpha)
+        # if (self.training_count - self.last_training_log_count > self.target_update_interval) or \
+        #         (self.last_training_log_count == -1):
 
-            self.logger.info("training_count: " + str(self.training_count) + ", updated target network")
-            self.last_training_log_count = self.training_count
+        # 每经过一定的训练次数，soft update target network
+        self.target_critic.soft_update(self.critic, self.soft_update_alpha)
+        self.target_mixer.soft_update(self.mixer, self.soft_update_alpha)
+        self.target_controller.soft_update(self.controller, self.soft_update_alpha)
+        self.logger.info("training_count: " + str(self.training_count) + ", updated target network")
+        # self.last_training_log_count = self.training_count
 
         if (total_steps - self.last_training_log_step > self.learner_log_interval) or \
                 (self.last_training_log_step == -1):

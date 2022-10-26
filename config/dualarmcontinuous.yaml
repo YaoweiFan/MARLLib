@@ -22,7 +22,7 @@ robot_state_size: 38
 object_state_size: 19
 n_agents: 2
 action_dim: 3
-obs_choose: "all"
+obs_choose: "noft"
 trajectory_data_path: "data/trajectory.csv"
 # Mujoco 相关
 has_renderer: False
