@@ -127,55 +127,55 @@ class OffPGLearner:
         self.mixer_optimiser.load_state_dict(
             th.load("{}/mixer_opt.th".format(path), map_location=lambda storage, loc: storage))
 
-    def deal_with_off_batch(self, off_batch):
-        batch_size = off_batch.batch_size
-        max_episode_length = off_batch.max_seq_length
-        device = off_batch.device
-
-        state = off_batch["state"]  # state: (batch_size, episode_steps, state_dim)
-        obs = off_batch["obs"]
-        actions = off_batch["actions"]  # actions: (batch_size, episode_steps, n_agents, action_dim)
-        log_prob = off_batch["log_prob"]  # log_prob: (batch_size, episode_steps, n_agents, 1)
-        rewards = off_batch["reward"][:, :-1, :]
-        terminated = off_batch["terminated"][:, :-1, :].float()
-        mask = off_batch["filled"][:, :-1, :].float()
-        mask[:, 1:, :] = mask[:, 1:, :] * (1 - terminated[:, :-1, :])
-
-        # inputs: (batch_size, episode_steps, n_agents, state_dim+obs_dim+n_agents)
-        inputs = self._build_critic_inputs(state, obs, batch_size, max_episode_length, device)
-        # joint_action_log_prob: (batch_size, episode_steps-1, 1)
-        joint_action_log_prob = log_prob.squeeze(3).sum(dim=2, keepdim=True)[:, :-1, :]
-        joint_action_prob = th.exp(joint_action_log_prob).detach()
-
-        # target_q_locals: (batch_size, episode_steps, n_agents, 1)
-        # target_expected_q_locals: (batch_size, episode_steps, n_agents, 1)
-        target_q_locals, target_expected_q_locals = self.target_critic(inputs, actions)
-        target_q_locals = target_q_locals.detach()
-        target_expected_q_locals = target_expected_q_locals.detach()
-        # 计算 expected_q_total
-        expected_q_total = self.target_mixer(target_expected_q_locals.squeeze(3), state, batch_size).detach()
-        expected_q_total[:, -1, :] = expected_q_total[:, -1, :] * (1 - th.sum(terminated, dim=1))
-        expected_q_total[:, :-1, :] = expected_q_total[:, :-1, :] * mask
-
-        # 计算 target_q_total
-        target_q_locals = target_q_locals.squeeze(3)
-        target_q_total = self.target_mixer(target_q_locals, state, batch_size).detach()
-        # 不需要处理 target_q_total 最后一个 mask 与否，因为用不到
-        target_q_total[:, :-1, :] = target_q_total[:, :-1, :] * mask
-
-        # delta 对于每个 episode 的有效区间为: [0, terminated_step]
-        delta = (rewards + self.gamma * expected_q_total[:, 1:, :] - target_q_total[:, :-1, :]) * mask
-
-        tree_backup = th.zeros_like(delta)
-        coefficient = 1.0
-        tmp = delta
-        padding = th.zeros_like(delta[:, :1, :])
-        for _ in range(self.tree_backup_step):
-            tree_backup += coefficient * tmp
-            tmp = th.cat(((tmp * joint_action_prob)[:, 1:, :], padding), dim=1)
-            coefficient *= self.gamma * self.td_lambda
-        tree_backup += target_q_total[:, :-1, :]
-        return inputs, state, actions, mask, tree_backup, max_episode_length
+    # def deal_with_off_batch(self, off_batch):
+    #     batch_size = off_batch.batch_size
+    #     max_episode_length = off_batch.max_seq_length
+    #     device = off_batch.device
+    #
+    #     state = off_batch["state"]  # state: (batch_size, episode_steps, state_dim)
+    #     obs = off_batch["obs"]
+    #     actions = off_batch["actions"]  # actions: (batch_size, episode_steps, n_agents, action_dim)
+    #     log_prob = off_batch["log_prob"]  # log_prob: (batch_size, episode_steps, n_agents, 1)
+    #     rewards = off_batch["reward"][:, :-1, :]
+    #     terminated = off_batch["terminated"][:, :-1, :].float()
+    #     mask = off_batch["filled"][:, :-1, :].float()
+    #     mask[:, 1:, :] = mask[:, 1:, :] * (1 - terminated[:, :-1, :])
+    #
+    #     # inputs: (batch_size, episode_steps, n_agents, state_dim+obs_dim+n_agents)
+    #     inputs = self._build_critic_inputs(state, obs, batch_size, max_episode_length, device)
+    #     # joint_action_log_prob: (batch_size, episode_steps-1, 1)
+    #     joint_action_log_prob = log_prob.squeeze(3).sum(dim=2, keepdim=True)[:, :-1, :]
+    #     joint_action_prob = th.exp(joint_action_log_prob).detach()
+    #
+    #     # target_q_locals: (batch_size, episode_steps, n_agents, 1)
+    #     # target_expected_q_locals: (batch_size, episode_steps, n_agents, 1)
+    #     target_q_locals, target_expected_q_locals = self.target_critic(inputs, actions)
+    #     target_q_locals = target_q_locals.detach()
+    #     target_expected_q_locals = target_expected_q_locals.detach()
+    #     # 计算 expected_q_total
+    #     expected_q_total = self.target_mixer(target_expected_q_locals.squeeze(3), state, batch_size).detach()
+    #     expected_q_total[:, -1, :] = expected_q_total[:, -1, :] * (1 - th.sum(terminated, dim=1))
+    #     expected_q_total[:, :-1, :] = expected_q_total[:, :-1, :] * mask
+    #
+    #     # 计算 target_q_total
+    #     target_q_locals = target_q_locals.squeeze(3)
+    #     target_q_total = self.target_mixer(target_q_locals, state, batch_size).detach()
+    #     # 不需要处理 target_q_total 最后一个 mask 与否，因为用不到
+    #     target_q_total[:, :-1, :] = target_q_total[:, :-1, :] * mask
+    #
+    #     # delta 对于每个 episode 的有效区间为: [0, terminated_step]
+    #     delta = (rewards + self.gamma * expected_q_total[:, 1:, :] - target_q_total[:, :-1, :]) * mask
+    #
+    #     tree_backup = th.zeros_like(delta)
+    #     coefficient = 1.0
+    #     tmp = delta
+    #     padding = th.zeros_like(delta[:, :1, :])
+    #     for _ in range(self.tree_backup_step):
+    #         tree_backup += coefficient * tmp
+    #         tmp = th.cat(((tmp * joint_action_prob)[:, 1:, :], padding), dim=1)
+    #         coefficient *= self.gamma * self.td_lambda
+    #     tree_backup += target_q_total[:, :-1, :]
+    #     return inputs, state, actions, mask, tree_backup, max_episode_length
 
     def train_critic(self, on_batch: EpisodeBatch, off_batch: EpisodeBatch = None, critic_running_log=None):
         """
@@ -223,18 +223,18 @@ class OffPGLearner:
         # # action_probs[avail_actions==0] = 0
         # action_probs.detach()
 
-        # QUESTION: 为何源代码中称 off_batch 为 best_batch?
-        # 处理 off_policy 的部分
-        if off_batch is not None:
-            off_inputs, off_state, off_actions, off_mask, tree_backup, off_max_episode_length \
-                = self.deal_with_off_batch(off_batch)
-            inputs = th.cat((inputs, off_inputs), dim=0)
-            state = th.cat((state, off_state), dim=0)
-            actions = th.cat((actions, off_actions), dim=0)
-            mask = th.cat((mask, off_mask), dim=0)
-            g_lambda = th.cat((g_lambda, tree_backup), dim=0)
-            max_episode_length = max(max_episode_length, off_max_episode_length)
-            batch_size += off_batch.batch_size
+        # # QUESTION: 为何源代码中称 off_batch 为 best_batch?
+        # # 处理 off_policy 的部分
+        # if off_batch is not None:
+        #     off_inputs, off_state, off_actions, off_mask, tree_backup, off_max_episode_length \
+        #         = self.deal_with_off_batch(off_batch)
+        #     inputs = th.cat((inputs, off_inputs), dim=0)
+        #     state = th.cat((state, off_state), dim=0)
+        #     actions = th.cat((actions, off_actions), dim=0)
+        #     mask = th.cat((mask, off_mask), dim=0)
+        #     g_lambda = th.cat((g_lambda, tree_backup), dim=0)
+        #     max_episode_length = max(max_episode_length, off_max_episode_length)
+        #     batch_size += off_batch.batch_size
 
         # train critic and mixer network
         for t in range(max_episode_length-1):

@@ -167,7 +167,7 @@ class ParallelRunner:
         episode_final_info = []
         # rollout
         while True:
-            actions, log_prob = self.controller.forward(self.batch, self.episode_step, avail_env, deterministic=False)
+            actions = self.controller.forward(self.batch, self.episode_step, avail_env, deterministic=False)
             # actions 增加的维度在 episode_step 上
             # QUESTION: mark_filled 有什么用处？
             # ANSWER: terminated 用来表明环境因失败终止
@@ -175,7 +175,7 @@ class ParallelRunner:
             #         2. 若不存在 terminated[t] == True, 超时或是成功，最后一步的 Q(t+1) 需要计算
             #         mark_filled 可以不要，使用 mark_filled 可以方便计算
             self.batch.update({"actions": actions}, avail_env, self.episode_step, mark_filled=False)
-            self.batch.update({"log_prob": log_prob}, avail_env, self.episode_step, mark_filled=False)
+            # self.batch.update({"log_prob": log_prob}, avail_env, self.episode_step, mark_filled=False)
             last_avail_env = avail_env.copy()
 
             # 更新下一步的 avail_env

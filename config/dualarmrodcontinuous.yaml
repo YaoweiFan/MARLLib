@@ -25,7 +25,7 @@ action_dim: 3
 obs_choose: "noft"
 trajectory_data_path: "data/trajectory.csv"
 # Mujoco 相关
-has_renderer: False
+has_renderer: True
 has_offscreen_renderer: False
 ignore_done: False
 use_camera_obs: False

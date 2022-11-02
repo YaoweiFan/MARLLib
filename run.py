@@ -151,6 +151,7 @@ def run_sequential(args, logger):
             learner.train_critic(on_buffer_samples[:, :max_episode_length], critic_running_log=critic_running_log)
 
             # train actor
+            # 只选取用当前策略跑出来的 on_batch_size 个 episode，确保 on_policy 训练 actor 
             latest_samples = on_buffer.sample_latest(on_batch_size)
             latest_samples.to(args.device)
             max_episode_length = latest_samples.max_t_filled()
