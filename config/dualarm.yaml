@@ -23,7 +23,7 @@ robot_state_size: 38
 object_state_size: 19
 n_agents: 2
 n_actions: 7
-obs_choose: "all"
+obs_choose: "noft"
 trajectory_data_path: "data/trajectory.csv"
 ms_xl: -0.25
 ms_xh: 0.25

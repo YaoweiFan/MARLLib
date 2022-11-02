@@ -315,8 +315,7 @@ class DualArmEnv(MultiAgentEnv):
                     self.obs[prefix + "eef_pos"],
                     self.obs[prefix + "eef_quat"],
                     # self.obs[prefix + "eef_ft"],
-                    np.array([0, 0, 0, 0, 0, 0]),
-                    # self.obs[prefix + "ft"],
+                    self.obs[prefix + "ft"],
                     self.obs[prefix + "peg_pos"],
                     self.obs[prefix + "peg_to_hole"],
                 )
