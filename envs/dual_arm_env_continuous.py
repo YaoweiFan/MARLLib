@@ -146,11 +146,6 @@ class DualArmContinuousEnv(MultiAgentEnv):
 
         self.last_action = np.zeros((self.n_agents, self.action_dim))
 
-        # 控制夹爪闭合
-        for i in range(3):
-            self.env.step(np.array([0, 0, 0, 1, 0, 0, 0, 1]))
-            self.render()
-
     def _mimic_reward(self):
         """Return mimic reward."""
         mimic_reward = 0
