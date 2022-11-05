@@ -47,23 +47,19 @@ class EpisodeRunner:
         self.video_record = evaluate_args["video_record"]
         self.skip_frame = evaluate_args["skip_frame"]
         self.video_save_dir = evaluate_args["video_save_path"]
-        if self.video_record:
-            os.makedirs(os.path.join(self.checkpoint_path, self.video_save_dir), exist_ok=True)
+        os.makedirs(os.path.join(self.checkpoint_path, self.video_save_dir), exist_ok=True)
         # record path
         self.path_record = evaluate_args["path_record"]
         self.path_save_dir = evaluate_args["path_save_path"]
-        if self.path_record:
-            os.makedirs(os.path.join(self.checkpoint_path, self.path_save_dir), exist_ok=True)
+        os.makedirs(os.path.join(self.checkpoint_path, self.path_save_dir), exist_ok=True)
         # record ft
         self.ft_record = evaluate_args["ft_record"]
         self.ft_save_dir = evaluate_args["ft_save_path"]
-        if self.ft_record:
-            os.makedirs(os.path.join(self.checkpoint_path, self.ft_save_dir), exist_ok=True)
+        os.makedirs(os.path.join(self.checkpoint_path, self.ft_save_dir), exist_ok=True)
         # record state
         self.state_record = evaluate_args["state_record"]
         self.state_save_dir = evaluate_args["state_save_path"]
-        if self.state_record:
-            os.makedirs(os.path.join(self.checkpoint_path, self.state_save_dir), exist_ok=True)
+        os.makedirs(os.path.join(self.checkpoint_path, self.state_save_dir), exist_ok=True)
 
         self.video_save_path = None
         self.path_save_path = None
