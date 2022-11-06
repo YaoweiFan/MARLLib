@@ -1,7 +1,7 @@
 # 算法相关
 seed: null
-reward_shaping: False
-reward_mimic: True
+reward_shaping: True
+reward_mimic: False
 reward_success: 200
 reward_defeat: -200
 reward_scale: 3.0

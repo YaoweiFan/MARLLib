@@ -27,8 +27,8 @@ def config_sanity_check_and_adjust(config, log):
 
 
 def evaluate_only(args, runner):
-    for i in range(args.evaluate_args.evaluate_n_episodes):
-        runner.set_path_name()
+    for i in range(args.evaluate_args["evaluate_n_episodes"]):
+        runner.set_path_name(i)
         runner.set_steps(runner.steps)
         runner.run()
     runner.log()
@@ -37,9 +37,14 @@ def evaluate_only(args, runner):
 
 def run_sequential(args, logger):
     # 选择 ParallelRunner 或者是 EpisodeRunner
-    runner = RUNNER[args.runner](logger, args.device, args.batch_size_run, args.clip_obs, args.clip_state, args.epsilon,
-                                 args.use_running_normalize, args.test_n_episodes, args.runner_log_interval, args.env,
-                                 args.env_args)
+    if args.evaluate:
+        runner = RUNNER[args.runner](logger, args.device, args.batch_size_run, args.checkpoint_path,
+                                     args.evaluate_args, args.env, args.env_args)
+    else:
+        runner = RUNNER[args.runner](logger, args.device, args.batch_size_run, args.clip_obs, args.clip_state,
+                                     args.epsilon, args.use_running_normalize, args.test_n_episodes,
+                                     args.runner_log_interval, args.env, args.env_args)
+
     env_info = runner.get_env_info()
 
     # 创建 off_policy buffer
@@ -98,7 +103,7 @@ def run_sequential(args, logger):
         logger.info("Loading model from {}".format(model_path))
         controller.load_models(model_path, args.record_param)
         learner.load_models(model_path)
-        runner.load_normalizer(model_path)
+        runner.load_normalizer(model_path+"/vec_normalize.pkl")
 
         runner.steps = load_point
 

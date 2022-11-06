@@ -1,6 +1,6 @@
 offpg_args:
   evaluate: True
-  checkpoint_path: "results/models/offpg_smac__2022-02-12_19-16-17"
+  checkpoint_path: "results/models/offpg_dualarm__2022-11-02_16-10-04"
   runner: "episode"
   batch_size_run: 1
 
@@ -9,19 +9,18 @@ evaluate_args:
   video_record: False
   skip_frame: 1
   video_save_path: "video"
-  path_record: True
+  path_record: False
   path_save_path: "path"
   ft_record: False
   ft_save_path: "ft"
-  state_record: True
+  state_record: False
   state_save_path: "state"
 
 env_args:
   # Mujoco 相关
   has_renderer: True
-  # has_renderer: False
-  # has_offscreen_renderer: True
-  # camera_name: "frontview"
-  # use_camera_obs: True
-  # camera_heights: 1024
-  # camera_widths: 1024
+#  has_offscreen_renderer: True
+#  camera_name: "frontview"
+#  use_camera_obs: True
+#  camera_heights: 1024
+#  camera_widths: 1024

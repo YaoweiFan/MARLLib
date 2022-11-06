@@ -11,13 +11,21 @@ from MARLLib.utils.vec_normalize import VecNormalize
 
 class EpisodeRunner:
 
-    def __init__(self, args, logger, device):
+    def __init__(self,
+                 logger,
+                 device,
+                 batch_size_run,
+                 checkpoint_path,
+                 evaluate_args,
+                 env,
+                 env_args):
+
         self.logger = logger
-        self.batch_size = args.batch_size_run
+        self.batch_size = batch_size_run
         assert self.batch_size == 1, "bath_size_run must be 1 when evaluate only!"
         self.device = device
         # 创建环境，获取环境信息
-        self.env = ENV[args.env](**args.env_args)
+        self.env = ENV[env](**env_args)
         env_info = self.get_env_info()
         self.episode_limit = env_info["episode_limit"]
 
@@ -33,21 +41,25 @@ class EpisodeRunner:
         self.controller = None
         self.batch = None
 
-        self.checkpoint_path = os.path.join(dirname(dirname(dirname(__file__))), args.checkpoint_path)
+        self.checkpoint_path = os.path.join(dirname(dirname(dirname(__file__))), checkpoint_path)
 
         # record video
-        self.video_record = args.evaluate_args.video_record
-        self.skip_frame = args.evaluate_args.skip_frame
-        self.video_save_dir = args.evaluate_args.video_save_path
+        self.video_record = evaluate_args["video_record"]
+        self.skip_frame = evaluate_args["skip_frame"]
+        self.video_save_dir = evaluate_args["video_save_path"]
+        os.makedirs(os.path.join(self.checkpoint_path, self.video_save_dir), exist_ok=True)
         # record path
-        self.path_record = args.path_record
-        self.path_save_dir = args.evaluate_args.path_save_path
+        self.path_record = evaluate_args["path_record"]
+        self.path_save_dir = evaluate_args["path_save_path"]
+        os.makedirs(os.path.join(self.checkpoint_path, self.path_save_dir), exist_ok=True)
         # record ft
-        self.ft_record = args.ft_record
-        self.ft_save_dir = args.evaluate_args.ft_save_path
+        self.ft_record = evaluate_args["ft_record"]
+        self.ft_save_dir = evaluate_args["ft_save_path"]
+        os.makedirs(os.path.join(self.checkpoint_path, self.ft_save_dir), exist_ok=True)
         # record state
-        self.state_record = args.state_record
-        self.state_save_dir = args.evaluate_args.state_save_path
+        self.state_record = evaluate_args["state_record"]
+        self.state_save_dir = evaluate_args["state_save_path"]
+        os.makedirs(os.path.join(self.checkpoint_path, self.state_save_dir), exist_ok=True)
 
         self.video_save_path = None
         self.path_save_path = None
@@ -128,15 +140,14 @@ class EpisodeRunner:
         while not terminated:
             pre_transition_data = {
                 "state": [self.normalizer.normalize_state(self.env.get_state(), test_mode=True)],
-                "avail_actions": [self.env.get_avail_actions()],
                 "obs": [self.normalizer.normalize_obs(self.env.get_obs(), test_mode=True)]
             }
 
             self.batch.update(pre_transition_data, ts=self.episode_step)
-            actions = self.controller.select_actions(self.batch, self.episode_step, self.steps, test_mode=True)
+            actions = self.controller.forward(self.batch, self.episode_step, deterministic=True)
+            actions = actions.detach().to("cpu").numpy()
 
-            reward, terminated, info = self.env.step(actions.reshape(-1))
-            self.env.render()
+            reward, terminated, info = self.env.step(actions.reshape((2, 3)))
             episode_return += reward
 
             post_transition_data = {
@@ -313,13 +324,12 @@ class EpisodeRunner:
 
         last_data = {
             "state": [self.normalizer.normalize_state(self.env.get_state(), test_mode=True)],
-            "avail_actions": [self.env.get_avail_actions()],
             "obs": [self.normalizer.normalize_obs(self.env.get_obs(), test_mode=True)]
         }
         self.batch.update(last_data, ts=self.episode_step)
 
         # Select actions in the last stored state
-        actions = self.controller.select_actions(self.batch, self.episode_step, self.steps, test_mode=True)
+        actions = self.controller.forward(self.batch, self.episode_step, deterministic=True)
         self.batch.update({"actions": actions}, ts=self.episode_step)
 
         self.returns.append(episode_return)

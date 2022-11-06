@@ -63,6 +63,7 @@ class Controller:
         distribution = self.action_distribution.proba_distribution(mean_actions, self.log_std)
         # 若 deterministic == True，意味着 action 选择的直接是 mean action
         actions = distribution.get_actions(deterministic=deterministic)
+        actions = th.clamp(actions, -1, 1)
         return actions.reshape(ep_batch.batch_size, self.n_agents, -1)[avail_env]
 
     def cuda(self):
