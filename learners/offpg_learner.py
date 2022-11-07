@@ -4,7 +4,6 @@ from torch.optim import RMSprop
 from torch.nn.utils import clip_grad_norm
 
 from .offpg_critic import OffPGCritic
-from .qmixer import QMixer
 from MARLLib.utils.buffer import EpisodeBatch
 from MARLLib.utils.function import plot_compute_graph
 
@@ -17,10 +16,8 @@ class OffPGLearner:
                  critic_hidden_dim,
                  controller,
                  logger,
-                 mixing_embed_dim,
                  actor_learning_rate,
                  critic_learning_rate,
-                 mixer_learning_rate,
                  optim_alpha,
                  optim_eps,
                  gamma,
@@ -48,8 +45,7 @@ class OffPGLearner:
         # model
         self.critic = OffPGCritic(scheme, actions_dim, n_agents, critic_hidden_dim)
         self.target_critic = copy.deepcopy(self.critic)
-        self.mixer = QMixer(n_agents, self.state_dim, mixing_embed_dim)
-        self.target_mixer = copy.deepcopy(self.mixer)
+
         self.target_controller = copy.deepcopy(self.controller)
         self.target_controller.cuda()
 
@@ -57,13 +53,9 @@ class OffPGLearner:
         self.agent_params = list(self.controller.parameters())
         self.agent_optimiser = RMSprop(params=self.agent_params, lr=actor_learning_rate, alpha=optim_alpha,
                                        eps=optim_eps)
-        critic_params = list(self.critic.parameters())
-        self.critic_optimiser = RMSprop(params=critic_params, lr=critic_learning_rate, alpha=optim_alpha,
+        self.critic_params = list(self.critic.parameters())
+        self.critic_optimiser = RMSprop(params=self.critic_params, lr=critic_learning_rate, alpha=optim_alpha,
                                         eps=optim_eps)
-        mixer_params = list(self.mixer.parameters())
-        self.mixer_optimiser = RMSprop(params=mixer_params, lr=mixer_learning_rate, alpha=optim_alpha,
-                                       eps=optim_eps)
-        self.critic_and_mixer_params = critic_params + mixer_params
 
         self.training_count = 0
         self.last_training_log_step = -1
@@ -85,28 +77,20 @@ class OffPGLearner:
 
     def cuda(self):
         self.critic.cuda()
-        self.mixer.cuda()
         self.target_critic.cuda()
-        self.target_mixer.cuda()
 
     def save_models(self, path):
         th.save(self.critic.state_dict(), "{}/critic.th".format(path))
-        th.save(self.mixer.state_dict(), "{}/mixer.th".format(path))
         th.save(self.agent_optimiser.state_dict(), "{}/agent_opt.th".format(path))
         th.save(self.critic_optimiser.state_dict(), "{}/critic_opt.th".format(path))
-        th.save(self.mixer_optimiser.state_dict(), "{}/mixer_opt.th".format(path))
 
     def load_models(self, path):
         self.critic.load_state_dict(th.load("{}/critic.th".format(path), map_location=lambda storage, loc: storage))
-        self.mixer.load_state_dict(th.load("{}/mixer.th".format(path), map_location=lambda storage, loc: storage))
         # self.target_critic.load_state_dict(self.critic.agent.state_dict())
-        # self.target_mixer.load_state_dict(self.mixer.state_dict())
         self.agent_optimiser.load_state_dict(
             th.load("{}/agent_opt.th".format(path), map_location=lambda storage, loc: storage))
         self.critic_optimiser.load_state_dict(
             th.load("{}/critic_opt.th".format(path), map_location=lambda storage, loc: storage))
-        self.mixer_optimiser.load_state_dict(
-            th.load("{}/mixer_opt.th".format(path), map_location=lambda storage, loc: storage))
 
     def train(self, off_batch: EpisodeBatch, total_steps, training_log=None):
         """
@@ -145,44 +129,42 @@ class OffPGLearner:
         target_actions = th.stack(target_action, dim=1)
         # target_q_locals: (batch_size, episode_steps, n_agents, 1)
         target_q_locals = self.target_critic(inputs, target_actions).detach()
-        # target_q_total: (batch_size, episode_steps, 1)
         target_q_locals = target_q_locals.squeeze(3)
-        target_q_total = self.target_mixer(target_q_locals, state, batch_size).detach()
-        target_q_total = target_q_total * mask  # 无 terminated 的都有效，有 terminated 的，terminated 后一步无效
+        # 无 terminated 的都有效，有 terminated 的，terminated 后一步无效
+        target_q_locals[:, :, :1] = target_q_locals[:, :, :1] * mask
+        target_q_locals[:, :, 1:2] = target_q_locals[:, :, 1:2] * mask
 
         # actor --> critic, rollout 得到的 actions 用在此处，所以不需要使用 actor
         q_locals = self.critic(inputs, actions)
         q_locals = q_locals.squeeze(3)
-        q_total = self.mixer(q_locals, state, batch_size)
-        q_total = q_total * mask  # terminated 的那一步是有效的，这一步的 r 要利用的
+        # terminated 的那一步是有效的，这一步的 r 要利用的
+        q_locals[:, :, :1] = q_locals[:, :, :1] * mask
+        q_locals[:, :, 1:2] = q_locals[:, :, 1:2] * mask
 
         # td_error 对于每个 episode 的有效区间为: [0, terminated_step]
-        td_error = rewards * mask[:, :-1, :] + self.gamma * target_q_total[:, 1:, :] - q_total[:, :-1, :]
-        critic_loss = (td_error ** 2).sum() / mask_num
+        td_error_0 = rewards * mask[:, :-1, :] + self.gamma * target_q_locals[:, 1:, :1] - q_locals[:, :-1, :1]
+        td_error_1 = rewards * mask[:, :-1, :] + self.gamma * target_q_locals[:, 1:, 1:2] - q_locals[:, :-1, 1:2]
+
+        critic_loss = ((td_error_0 ** 2).sum() + (td_error_1 ** 2).sum()) / (2 * mask_num)
 
         # # 打印计算图
         # params_dict = dict()
         # params_dict.update(dict(self.controller.agent.named_parameters()))
         # params_dict.update({"log_std": self.controller.log_std})
-        # params_dict.update(dict(self.mixer.named_parameters()))
         # params_dict.update(dict(self.critic.named_parameters()))
         # plot_compute_graph(critic_loss, params_dict)
 
-        # IMPROVING: 源代码中这里还有一个 goal_loss，不知道是干什么用的，源代码也没有用上这一项
         self.critic_optimiser.zero_grad()
-        self.mixer_optimiser.zero_grad()
         critic_loss.backward()
         # 限制梯度
-        grad_norm = clip_grad_norm(self.critic_and_mixer_params, self.grad_norm_clip)
+        grad_norm = clip_grad_norm(self.critic_params, self.grad_norm_clip)
         self.critic_optimiser.step()
-        self.mixer_optimiser.step()
 
         # 记录 critic 训练过程的信息
         training_log["critic_loss"].append(critic_loss.item())
         training_log["critic_grad_norm"].append(grad_norm)
-        training_log["td_error_abs"].append(td_error.abs().sum().item() / mask_num.item())
-        training_log["target_q_total_mean"].append(target_q_total.sum().item() / mask_num.item())
-        training_log["q_total_mean"].append(q_total.sum().item() / mask_num.item())
+        training_log["td_error_0_abs"].append(td_error_0.abs().sum().item() / mask_num.item())
+        training_log["td_error_1_abs"].append(td_error_1.abs().sum().item() / mask_num.item())
         training_log["q_locals_mean"].append(
             (th.mean(q_locals, dim=2, keepdim=True) * mask).sum().item() / mask_num.item())
         training_log["q_locals_var"].append(
@@ -205,17 +187,16 @@ class OffPGLearner:
         actions = th.stack(action, dim=1)
         # q_locals: (batch_size, episode_steps, n_agents, 1)
         q_locals = self.critic(inputs, actions)
-        # q_total: (batch_size, episode_steps, 1)
         q_locals = q_locals.squeeze(3)
-        q_total = self.mixer(q_locals, state, batch_size)
-        q_total = q_total * mask  # 无 terminated 的都有效，有 terminated 的，terminated 后一步无效
-        actor_loss = -q_total.sum() / mask_num
+
+        q_locals[:, :, :1] = q_locals[:, :, :1] * mask  # 无 terminated 的都有效，有 terminated 的，terminated 后一步无效
+        q_locals[:, :, 1:2] = q_locals[:, :, 1:2] * mask
+        actor_loss = -q_locals.sum() / (2 * mask_num)
 
         # # 打印计算图
         # params_dict = dict()
         # params_dict.update(dict(self.controller.agent.named_parameters()))
         # params_dict.update({"log_std": self.controller.log_std})
-        # params_dict.update(dict(self.mixer.named_parameters()))
         # params_dict.update(dict(self.critic.named_parameters()))
         # plot_compute_graph(actor_loss, params_dict)
 
@@ -243,6 +224,5 @@ class OffPGLearner:
         if self.training_count % 3 == 0:
             # 每经过一定的训练次数，soft update target network
             self.target_critic.soft_update(self.critic, self.soft_update_alpha)
-            self.target_mixer.soft_update(self.mixer, self.soft_update_alpha)
             self.target_controller.soft_update(self.controller, self.soft_update_alpha)
-            self.logger.info("training_count: " + str(self.training_count) + ", updated target network")
+            self.logger.info("training_count: " + str(self.training_count) + ", target network soft updated")

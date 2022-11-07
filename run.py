@@ -73,8 +73,8 @@ def run_sequential(args, logger):
 
     # 创建 learner
     learner = OffPGLearner(off_buffer.scheme, env_info["action_dim"], env_info["n_agents"], args.critic_hidden_dim,
-                           controller, logger, args.mixing_embed_dim, args.actor_learning_rate,
-                           args.critic_learning_rate, args.mixer_learning_rate, args.optim_alpha, args.optim_eps,
+                           controller, logger, args.actor_learning_rate,
+                           args.critic_learning_rate, args.optim_alpha, args.optim_eps,
                            args.gamma, args.td_lambda, args.grad_norm_clip, args.target_update_interval,
                            args.learner_log_interval, args.tree_backup_step, args.soft_update_alpha)
 
@@ -127,9 +127,8 @@ def run_sequential(args, logger):
         training_log = {
             "critic_loss": [],
             "critic_grad_norm": [],
-            "td_error_abs": [],
-            "target_q_total_mean": [],
-            "q_total_mean": [],
+            "td_error_0_abs": [],
+            "td_error_1_abs": [],
             "q_locals_mean": [],
             "q_locals_var": [],
             "actor_loss": [],
