@@ -1,6 +1,7 @@
 import os
 import torch as th
 import numpy as np
+import math
 
 from MARLLib.utils.distributions import DiagGaussianDistribution
 from .fc_agent import FcAgent
@@ -33,7 +34,7 @@ class Controller:
         self.agent = FcAgent(input_shape, hidden_dim, action_dim)
         # 创建 action 采样 distribution
         self.action_distribution = DiagGaussianDistribution(action_dim)
-        self.log_std = th.nn.Parameter(th.ones(self.action_dim) * log_std_init, requires_grad=True)
+        self.log_std = th.nn.Parameter(th.ones(self.action_dim) * log_std_init, requires_grad=False)
 
     def _build_inputs(self, ep_batch, episode_step):
         """
@@ -55,7 +56,7 @@ class Controller:
         inputs = th.cat([item.reshape(ep_batch.batch_size * self.n_agents, -1) for item in inputs], dim=1)
         return inputs
 
-    def forward(self, ep_batch, episode_step, avail_env=slice(None), deterministic=True):
+    def forward(self, ep_batch, episode_step, avail_env=slice(None), deterministic=False):
         # inputs: (batch_size_run * n_agents, obs_size+last_action_dim+agent_id_size)
         inputs = self._build_inputs(ep_batch, episode_step)
         # mean_actions: (batch_size_run * n_agents, action_dim)
@@ -71,7 +72,7 @@ class Controller:
         self.log_std = self.log_std.to("cuda")
 
     def parameters(self):
-        # TODO: 如果是 no deterministic 的话要把 log_std 也加入进去，实质上就是要把 (string, Parameter) 加入迭代容器中去
+        # 如果是 no deterministic 的话要把 log_std 也加入进去，实质上就是要把 (string, Parameter) 加入迭代容器中去
         return self.agent.parameters()
 
     def save_models(self, path):
@@ -82,6 +83,10 @@ class Controller:
         if record_param:
             self.record(os.path.join(path, "parameters"))
             raise Exception("Controller network loaded successfully!")
+
+    def variance_reduce(self):
+        if self.log_std[0] > math.log(0.5):
+            self.log_std += math.log(0.999998)
 
     def soft_update(self, source, alpha):
         self.agent.soft_update(source.agent, alpha)

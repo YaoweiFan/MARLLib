@@ -66,7 +66,6 @@ class OffPGLearner:
         self.critic_and_mixer_params = critic_params + mixer_params
 
         self.training_count = 0
-        self.last_training_log_count = -1
         self.last_training_log_step = -1
 
     def _build_critic_inputs(self, state, obs, batch_size, max_t, device):
@@ -198,10 +197,6 @@ class OffPGLearner:
 
         self.training_count += 1
 
-        # critic、mixer 更新两次，actor 更新一次、target 更新一次
-        if self.training_count % 2 == 0:
-            return
-
         # actor --> critic
         action = []
         for t in range(max_episode_length):
@@ -230,23 +225,24 @@ class OffPGLearner:
         grad_norm = clip_grad_norm(self.agent_params, self.grad_norm_clip)
         self.agent_optimiser.step()
 
+        # 一次训练后减小探索方差，target_controller 不必更新这一项，soft update 的时候同步即可
+        self.controller.variance_reduce()
+
         # 记录 actor 训练过程的信息
         training_log["actor_loss"].append(actor_loss.item())
         training_log["agent_grad_norm"].append(grad_norm)
+        training_log["log_std"].append(self.controller.log_std[0].item())
 
-        # if (self.training_count - self.last_training_log_count > self.target_update_interval) or \
-        #         (self.last_training_log_count == -1):
-
-        # 每经过一定的训练次数，soft update target network
-        self.target_critic.soft_update(self.critic, self.soft_update_alpha)
-        self.target_mixer.soft_update(self.mixer, self.soft_update_alpha)
-        self.target_controller.soft_update(self.controller, self.soft_update_alpha)
-        self.logger.info("training_count: " + str(self.training_count) + ", updated target network")
-        # self.last_training_log_count = self.training_count
-
+        # 每经过一定的训练次数，打印训练信息
         if (total_steps - self.last_training_log_step > self.learner_log_interval) or \
                 (self.last_training_log_step == -1):
-            # 每经过一定的训练步数，打印训练信息
             for key, value in training_log.items():
                 self.logger.log_stat(key, sum(value)/len(value), total_steps)
             self.last_training_log_step = total_steps
+
+        if self.training_count % 3 == 0:
+            # 每经过一定的训练次数，soft update target network
+            self.target_critic.soft_update(self.critic, self.soft_update_alpha)
+            self.target_mixer.soft_update(self.mixer, self.soft_update_alpha)
+            self.target_controller.soft_update(self.controller, self.soft_update_alpha)
+            self.logger.info("training_count: " + str(self.training_count) + ", updated target network")

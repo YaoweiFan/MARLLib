@@ -136,7 +136,8 @@ def run_sequential(args, logger):
             "agent_grad_norm": [],
             "action_x_mean": [],
             "action_y_mean": [],
-            "action_z_mean": []
+            "action_z_mean": [],
+            "log_std": []
         }
 
         # rollout， 每个子进程走完一个 episode
