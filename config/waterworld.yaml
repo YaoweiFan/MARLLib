@@ -1,0 +1,9 @@
+n_pursuers: 2
+n_evaders: 50
+n_poison: 50
+obstacle_radius: 0.04
+food_reward: 10.
+poison_reward: -1.
+encounter_reward: 0.01
+n_coop: 2
+sensor_range: 0.2

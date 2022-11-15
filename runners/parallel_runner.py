@@ -122,8 +122,10 @@ class ParallelRunner:
         self.runner_log_interval = runner_log_interval  # 每隔多少步记录一次
 
         # 信息记录
-        self.test_reward = RunningMeanStd(shape=(1,))
-        self.train_reward = RunningMeanStd(shape=(1,))
+        self.test_reward0 = RunningMeanStd(shape=(1,))
+        self.test_reward1 = RunningMeanStd(shape=(1,))
+        self.train_reward0 = RunningMeanStd(shape=(1,))
+        self.train_reward1 = RunningMeanStd(shape=(1,))
         self.test_stats = {}
         self.train_stats = {}
 
@@ -240,19 +242,25 @@ class ParallelRunner:
                     self.test_stats.update({k: self.test_stats.get(k, 0)+v})
             self.test_stats.update({"n_episodes": self.test_stats.get("n_episodes", 0)+self.batch_size_run})
             self.test_stats.update({"steps": sum(episode_length)+self.test_stats.get("steps", 0)})
-            self.test_reward.update(np.mean(episode_reward), np.var(episode_reward), self.batch_size_run)
+            episode_reward = np.array(episode_reward)
+            self.test_reward0.update(np.mean(episode_reward[:, 0]), np.var(episode_reward[:, 0]), self.batch_size_run)
+            self.test_reward1.update(np.mean(episode_reward[:, 1]), np.var(episode_reward[:, 1]), self.batch_size_run)
         else:
             for item in episode_final_info:
                 for k, v in item.items():
                     self.train_stats.update({k: self.train_stats.get(k, 0)+v})
             self.train_stats.update({"n_episodes": self.train_stats.get("n_episodes", 0)+self.batch_size_run})
             self.train_stats.update({"steps": sum(episode_length)+self.train_stats.get("steps", 0)})
-            self.train_reward.update(np.mean(episode_reward), np.var(episode_reward), self.batch_size_run)
+            episode_reward = np.array(episode_reward)
+            self.train_reward0.update(np.mean(episode_reward[:, 0]), np.var(episode_reward[:, 0]), self.batch_size_run)
+            self.train_reward1.update(np.mean(episode_reward[:, 1]), np.var(episode_reward[:, 1]), self.batch_size_run)
 
         # 打印日志
         if test_mode and (self.test_stats.get("n_episodes", 0) == self.test_n_episodes):
-            self.logger.log_stat("test_reward_mean", self.test_reward.mean, self.steps)
-            self.logger.log_stat("test_reward_std", self.test_reward.var, self.steps)
+            self.logger.log_stat("test_reward0_mean", self.test_reward0.mean, self.steps)
+            self.logger.log_stat("test_reward0_std", self.test_reward0.var, self.steps)
+            self.logger.log_stat("test_reward1_mean", self.test_reward1.mean, self.steps)
+            self.logger.log_stat("test_reward1_std", self.test_reward1.var, self.steps)
             for k, v in self.test_stats.items():
                 if k is not "n_episodes":
                     if k is "steps":
@@ -261,11 +269,14 @@ class ParallelRunner:
                         self.logger.log_stat("test_" + k + "_rate", v/self.test_stats["n_episodes"], self.steps)
             # 清空记录
             self.test_stats.clear()
-            self.test_reward.clear()
+            self.test_reward0.clear()
+            self.test_reward1.clear()
 
         if not test_mode and (self.steps - self.log_steps >= self.runner_log_interval):
-            self.logger.log_stat("reward_mean", self.train_reward.mean, self.steps)
-            self.logger.log_stat("reward_std", self.train_reward.var, self.steps)
+            self.logger.log_stat("train_reward0_mean", self.train_reward0.mean, self.steps)
+            self.logger.log_stat("train_reward0_std", self.train_reward0.var, self.steps)
+            self.logger.log_stat("train_reward1_mean", self.train_reward1.mean, self.steps)
+            self.logger.log_stat("train_reward1_std", self.train_reward1.var, self.steps)
             for k, v in self.train_stats.items():
                 if k is not "n_episodes":
                     if k is "steps":
@@ -274,7 +285,8 @@ class ParallelRunner:
                         self.logger.log_stat("train_" + k + "_rate", v/self.train_stats["n_episodes"], self.steps)
             # 清空记录
             self.train_stats.clear()
-            self.train_reward.clear()
+            self.train_reward0.clear()
+            self.train_reward1.clear()
             self.log_steps = self.steps
 
         return self.batch

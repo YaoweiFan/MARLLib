@@ -47,7 +47,7 @@ class OffPGLearner:
         self.target_critic = copy.deepcopy(self.critic)
 
         self.target_controller = copy.deepcopy(self.controller)
-        self.target_controller.cuda()
+        # self.target_controller.cuda()
 
         # optimiser
         self.agent_params = list(self.controller.parameters())
@@ -112,7 +112,7 @@ class OffPGLearner:
         state = off_batch["state"]  # state: (batch_size, episode_steps, state_dim)
         obs = off_batch["obs"]
         actions = off_batch["actions"]  # actions: (batch_size, episode_steps, n_agents, action_dim)
-        rewards = off_batch["reward"][:, :-1, :]
+        rewards = off_batch["reward"][:, :-1, :, :]  # rewards: (batch_size, episode_steps, n_agents, 1)
         terminated = off_batch["terminated"].float()
         mask = off_batch["filled"].float()
         mask[:, 1:, :] = mask[:, 1:, :] * (1 - terminated[:, :-1, :])
@@ -142,8 +142,8 @@ class OffPGLearner:
         q_locals[:, :, 1:2] = q_locals[:, :, 1:2] * mask
 
         # td_error 对于每个 episode 的有效区间为: [0, terminated_step]
-        td_error_0 = rewards * mask[:, :-1, :] + self.gamma * target_q_locals[:, 1:, :1] - q_locals[:, :-1, :1]
-        td_error_1 = rewards * mask[:, :-1, :] + self.gamma * target_q_locals[:, 1:, 1:2] - q_locals[:, :-1, 1:2]
+        td_error_0 = rewards[:, :, 0, :] * mask[:, :-1, :] + self.gamma * target_q_locals[:, 1:, :1] - q_locals[:, :-1, :1]
+        td_error_1 = rewards[:, :, 1, :] * mask[:, :-1, :] + self.gamma * target_q_locals[:, 1:, 1:2] - q_locals[:, :-1, 1:2]
 
         critic_loss = ((td_error_0 ** 2).sum() + (td_error_1 ** 2).sum()) / (2 * mask_num)
 
@@ -174,8 +174,6 @@ class OffPGLearner:
             (th.mean(actions[:, :, :, 0], dim=2, keepdim=True) * mask).sum().item() / mask_num.item())
         training_log["action_y_mean"].append(
             (th.mean(actions[:, :, :, 1], dim=2, keepdim=True) * mask).sum().item() / mask_num.item())
-        training_log["action_z_mean"].append(
-            (th.mean(actions[:, :, :, 2], dim=2, keepdim=True) * mask).sum().item() / mask_num.item())
 
         self.training_count += 1
 
@@ -221,7 +219,7 @@ class OffPGLearner:
                 self.logger.log_stat(key, sum(value)/len(value), total_steps)
             self.last_training_log_step = total_steps
 
-        if self.training_count % 3 == 0:
+        if self.training_count % 100 == 0:
             # 每经过一定的训练次数，soft update target network
             self.target_critic.soft_update(self.critic, self.soft_update_alpha)
             self.target_controller.soft_update(self.controller, self.soft_update_alpha)

@@ -52,7 +52,7 @@ def run_sequential(args, logger):
         "state": {"vshape": env_info["state_shape"]},
         "obs": {"vshape": env_info["obs_shape"], "group": "agents"},
         "actions": {"vshape": env_info["action_dim"], "group": "agents"},
-        "reward": {"vshape": (1,)},
+        "reward": {"vshape": (1,), "group": "agents"},
         "terminated": {"vshape": (1,), "dtype": th.uint8},
     }
     groups = {
@@ -135,7 +135,6 @@ def run_sequential(args, logger):
             "agent_grad_norm": [],
             "action_x_mean": [],
             "action_y_mean": [],
-            "action_z_mean": [],
             "log_std": []
         }
 
@@ -145,13 +144,13 @@ def run_sequential(args, logger):
 
         # train
         if off_buffer.can_sample(off_batch_size):
-            # train critic
-            off_buffer_samples = off_buffer.uni_sample(off_batch_size)
-            off_buffer_samples.to(args.device)
-
-            # 获得 samples 中最长 episode 的长度
-            max_episode_length = max(off_buffer_samples.max_t_filled())
-            learner.train(off_buffer_samples[:, :max_episode_length], runner.steps, training_log=training_log)
+            for _ in range(100):
+                # sample
+                off_buffer_samples = off_buffer.uni_sample(off_batch_size)
+                off_buffer_samples.to(args.device)
+                # 获得 samples 中最长 episode 的长度
+                max_episode_length = max(off_buffer_samples.max_t_filled())
+                learner.train(off_buffer_samples[:, :max_episode_length], runner.steps, training_log=training_log)
 
         # test
         if (runner.steps - last_test_timestep > args.test_interval) or (last_test_timestep == 0):
