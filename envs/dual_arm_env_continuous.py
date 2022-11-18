@@ -197,9 +197,9 @@ class DualArmContinuousEnv(MultiAgentEnv):
             self.assemble_game += 1
             if info["success"]:
                 self.assemble_success += 1
-                reward += self.reward_success * (1 - self.reward_shaping)
+                reward += self.reward_success
             if info["defeat"]:
-                reward += self.reward_defeat * (1 - self.reward_shaping)
+                reward += self.reward_defeat
 
         if self.debug:
             logging.debug("Reward = {}".format(reward).center(60, '-'))
