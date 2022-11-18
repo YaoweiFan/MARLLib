@@ -124,7 +124,7 @@ class OffPGLearner:
         # target_actor --> target_critic
         target_action = []
         for t in range(max_episode_length):
-            target_action.append(self.target_controller.forward(off_batch, t).detach())
+            target_action.append(self.target_controller.forward(off_batch, t, deterministic=True).detach())
         # target_actions: (batch_size, episode_steps, n_agents, action_dim)
         target_actions = th.stack(target_action, dim=1)
         # target_q_locals: (batch_size, episode_steps, n_agents, 1)
@@ -182,7 +182,7 @@ class OffPGLearner:
         # actor --> critic
         action = []
         for t in range(max_episode_length):
-            action.append(self.controller.forward(off_batch, t))
+            action.append(self.controller.forward(off_batch, t, deterministic=True))
         # actions: (batch_size, episode_steps, n_agents, action_dim)
         actions = th.stack(action, dim=1)
         # q_locals: (batch_size, episode_steps, n_agents, 1)

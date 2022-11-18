@@ -1,6 +1,6 @@
 offpg_args:
   evaluate: True
-  checkpoint_path: "results/models/offpg_dualarm__2022-11-02_16-10-04"
+  checkpoint_path: "results/models/offpg_dualarm__2022-11-07_16-34-43"
   runner: "episode"
   batch_size_run: 1
 
