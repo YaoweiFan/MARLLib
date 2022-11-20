@@ -58,10 +58,7 @@ def run_sequential(args, logger):
 
     on_buffer = ReplayBuffer(scheme, groups, args.on_buffer_size, env_info["episode_limit"]+1,
                              preprocess=preprocess, device="cpu" if args.buffer_cpu_only else args.device)
-    # off_buffer = ReplayBuffer(scheme, groups, args.off_buffer_size, env_info["episode_limit"]+1,
-    #                           preprocess=preprocess, device="cpu" if args.buffer_cpu_only else args.device)
     on_batch_size = args.on_batch_size
-    off_batch_size = args.off_batch_size
 
     # 创建 controller
     controller = Controller(on_buffer.scheme, env_info["n_agents"], args.obs_last_action, args.obs_agent_id,
@@ -136,7 +133,6 @@ def run_sequential(args, logger):
         # rollout， 每个子进程走完一个 episode
         episode_batch = runner.rollout(test_mode=False)
         on_buffer.insert_episode_batch(episode_batch)
-        # off_buffer.insert_episode_batch(episode_batch)
 
         # train
         if on_buffer.can_sample(on_batch_size):
@@ -156,6 +152,9 @@ def run_sequential(args, logger):
             latest_samples.to(args.device)
             max_episode_length = latest_samples.max_t_filled()
             learner.train_actor(latest_samples[:, :max_episode_length], runner.steps, critic_running_log)
+
+            # 减小 action variance
+            controller.variance_reduce()
 
         # test
         if (runner.steps - last_test_timestep > args.test_interval) or (last_test_timestep == 0):

@@ -272,8 +272,6 @@ class OffPGLearner:
                 (self.last_actor_training_log_step == -1):
             for key, value in critic_running_log.items():
                 self.logger.log_stat(key, sum(value)/len(value), total_steps)
-            # self.logger.log_stat("q_max_first", critic_running_log["q_max_first"], total_steps)
-            # self.logger.log_stat("q_min_first", critic_running_log["q_min_first"], total_steps)
             self.logger.log_stat("advantage_mean", (advantages * mask).sum().item() / mask.sum().item(), total_steps)
             self.logger.log_stat("coma_loss", coma_loss.item(), total_steps)
             self.logger.log_stat("agent_grad_norm", grad_norm, total_steps)

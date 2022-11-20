@@ -28,14 +28,12 @@ local_results_path: "results" # Path for local results
 gamma: 0.99
 on_batch_size: 16 # Number of episodes to train on
 on_buffer_size: 32 # Size of the replay buffer
-off_batch_size: 32  # Number of off-policy episodes to train on
-off_buffer_size: 5000 # size of the off-policy buffer
 actor_learning_rate: 0.0001 # Learning rate for agents
 critic_learning_rate: 0.0001 # Learning rate for critics
 mixer_learning_rate: 0.0001 # Learning rate for mixer
 optim_alpha: 0.99 # RMSProp alpha
 optim_eps: 0.00001 # RMSProp epsilon
-grad_norm_clip: 20 # Reduce magnitude of gradients above this L2 norm
+grad_norm_clip: 5 # Reduce magnitude of gradients above this L2 norm
 target_update_interval: 2000 # update the target network every {} training steps
 tree_backup_step: 5 # steps for tree back up diagram  (adjustable based on # of agents)
 td_lambda: 0.8
@@ -74,8 +72,8 @@ critic_train_reps: 1
 q_nstep: 0  # 0 corresponds to default Q, 1 is r + gamma*Q, etc
 
 # --- Normalizer ---
-clip_obs: 10.0
-clip_state: 10.0
+clip_obs: 1.0
+clip_state: 1.0
 epsilon: 0.00000001
 use_running_normalize: True
 

@@ -1,6 +1,7 @@
 import os
 import torch as th
 import numpy as np
+import math
 from itertools import chain
 
 from MARLLib.utils.distributions import DiagGaussianDistribution
@@ -35,7 +36,7 @@ class Controller:
         self.hidden_states = None
         # 创建 action 采样 distribution
         self.action_distribution = DiagGaussianDistribution(action_dim)
-        self.log_std = th.nn.Parameter(th.ones(self.action_dim) * log_std_init, requires_grad=True)
+        self.log_std = th.nn.Parameter(th.ones(self.action_dim) * log_std_init, requires_grad=False)
 
     def init_hidden(self, batch_size):
         self.hidden_states = self.agent.init_hidden().unsqueeze(0).unsqueeze(0).expand(batch_size, self.n_agents, -1)
@@ -60,7 +61,7 @@ class Controller:
         inputs = th.cat([item.reshape(ep_batch.batch_size * self.n_agents, -1) for item in inputs], dim=1)
         return inputs
 
-    def forward(self, ep_batch, episode_step, avail_env, deterministic=True):
+    def forward(self, ep_batch, episode_step, avail_env, deterministic):
         # inputs: (batch_size_run * n_agents, obs_size+last_action_dim+agent_id_size)
         inputs = self._build_inputs(ep_batch, episode_step)
         # mean_actions: (batch_size_run * n_agents, action_dim)
@@ -77,7 +78,7 @@ class Controller:
         inputs = self._build_inputs(ep_batch, episode_step)
         # mean_actions: (batch_size_run * n_agents, action_dim)
         mean_actions, self.hidden_states = self.agent(inputs, self.hidden_states)
-        distribution = self.action_distribution.proba_distribution(mean_actions, self.log_std)  # 这里的 self.log_std 有问题
+        distribution = self.action_distribution.proba_distribution(mean_actions, self.log_std)
         actions = ep_batch["actions"][:, episode_step].reshape(ep_batch.batch_size*self.n_agents, -1)
         # log_prob: (batch_size_run * n_agents, )
         log_prob = distribution.log_prob(actions)
@@ -88,10 +89,11 @@ class Controller:
         self.log_std = self.log_std.to("cuda")
 
     def parameters(self):
-        return chain(self.agent.parameters(), self.distribution_param())
+        # return chain(self.agent.parameters(), self.distribution_param())
+        return self.agent.parameters()
 
-    def distribution_param(self):
-        yield self.log_std
+    # def distribution_param(self):
+    #     yield self.log_std
 
     def save_models(self, path):
         th.save(self.agent.state_dict(), "{}/agent.th".format(path))
@@ -101,6 +103,10 @@ class Controller:
         if record_param:
             self.record(os.path.join(path, "parameters"))
             raise Exception("Controller network loaded successfully!")
+
+    def variance_reduce(self):
+        if self.log_std[0] > math.log(0.5):
+            self.log_std += math.log(0.999998)
 
     def record(self, path):
         # 记录 agent 网络参数
