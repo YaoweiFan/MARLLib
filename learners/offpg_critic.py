@@ -17,8 +17,8 @@ class OffPGCritic(th.nn.Module):
         input_shape = scheme["state"]["vshape"] + scheme["obs"]["vshape"] + n_agents
         self.fc = th.nn.Linear(input_shape, critic_hidden_dim)
 
-        self.fc_v1 = th.nn.Linear(critic_hidden_dim, critic_hidden_dim)
-        self.fc_v2 = th.nn.Linear(critic_hidden_dim, 1)
+        # self.fc_v1 = th.nn.Linear(critic_hidden_dim, critic_hidden_dim)
+        self.fc_v = th.nn.Linear(critic_hidden_dim, 1)
 
         self.fc_a1 = th.nn.Linear(critic_hidden_dim + action_dim, critic_hidden_dim)
         self.fc_a2 = th.nn.Linear(critic_hidden_dim, 1)
@@ -27,8 +27,8 @@ class OffPGCritic(th.nn.Module):
         hidden = relu(self.fc(vnet_inputs))
 
         # fc_v1_output: (batch_size, episode_steps, n_agents, critic_hidden_dim)
-        fc_v1_outputs = relu(self.fc_v1(hidden))
-        v = self.fc_v2(fc_v1_outputs)
+        # fc_v1_outputs = relu(self.fc_v1(hidden))
+        v = self.fc_v(hidden)
 
         # actions: (batch_size, episode_steps, n_agents, action_dim)
         # terminated = True 的那一步之后的一步的 action 在 rollout 过程中是会采集的，但这是不能用的

@@ -68,17 +68,16 @@ class Controller:
         distribution = self.action_distribution.proba_distribution(mean_actions, self.log_std)
         # 若 deterministic == True，意味着 action 选择的直接是 mean action
         actions = distribution.get_actions(deterministic=deterministic)
-        # log_prob: (batch_size_run * n_agents, )
-        log_prob = distribution.log_prob(actions)
-        return actions.reshape(ep_batch.batch_size, self.n_agents, -1)[avail_env], \
-            log_prob.reshape(ep_batch.batch_size, self.n_agents, -1)[avail_env]
+        # 对输出动作作限制
+        actions = th.clamp(actions, -1, 1)
+        return actions.reshape(ep_batch.batch_size, self.n_agents, -1)[avail_env]
 
     def evaluate_actions(self, ep_batch, episode_step):
         # inputs: (batch_size_run * n_agents, obs_size+last_action_dim+agent_id_size)
         inputs = self._build_inputs(ep_batch, episode_step)
         # mean_actions: (batch_size_run * n_agents, action_dim)
         mean_actions, self.hidden_states = self.agent(inputs, self.hidden_states)
-        distribution = self.action_distribution.proba_distribution(mean_actions, self.log_std)
+        distribution = self.action_distribution.proba_distribution(mean_actions, self.log_std)  # 这里的 self.log_std 有问题
         actions = ep_batch["actions"][:, episode_step].reshape(ep_batch.batch_size*self.n_agents, -1)
         # log_prob: (batch_size_run * n_agents, )
         log_prob = distribution.log_prob(actions)

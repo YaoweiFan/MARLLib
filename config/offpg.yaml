@@ -30,7 +30,7 @@ on_batch_size: 16 # Number of episodes to train on
 on_buffer_size: 32 # Size of the replay buffer
 off_batch_size: 32  # Number of off-policy episodes to train on
 off_buffer_size: 5000 # size of the off-policy buffer
-actor_learning_rate: 0.0005 # Learning rate for agents
+actor_learning_rate: 0.0001 # Learning rate for agents
 critic_learning_rate: 0.0001 # Learning rate for critics
 mixer_learning_rate: 0.0001 # Learning rate for mixer
 optim_alpha: 0.99 # RMSProp alpha
@@ -48,7 +48,7 @@ obs_agent_id: True # Include the agent's one_hot id in the observation
 obs_last_action: True # Include the agent's last action (one_hot) in the observation
 
 # --- Critic parameters ---
-critic_hidden_dim: 256
+critic_hidden_dim: 64
 
 # --- Experiment running params ---
 repeat_id: 1
