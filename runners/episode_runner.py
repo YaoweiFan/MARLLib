@@ -61,6 +61,9 @@ class EpisodeRunner:
         self.state_save_dir = evaluate_args["state_save_path"]
         os.makedirs(os.path.join(self.checkpoint_path, self.state_save_dir), exist_ok=True)
 
+        # deterministic or not
+        self.deterministic = evaluate_args["deterministic_policy"]
+
         self.video_save_path = None
         self.path_save_path = None
         self.ft_save_path = None
@@ -144,7 +147,7 @@ class EpisodeRunner:
             }
 
             self.batch.update(pre_transition_data, ts=self.episode_step)
-            actions = self.controller.forward(self.batch, self.episode_step, deterministic=True)
+            actions = self.controller.forward(self.batch, self.episode_step, deterministic=self.deterministic)
             actions = actions.detach().to("cpu").numpy()
 
             reward, terminated, info = self.env.step(actions.reshape((2, 3)))
@@ -329,7 +332,7 @@ class EpisodeRunner:
         self.batch.update(last_data, ts=self.episode_step)
 
         # Select actions in the last stored state
-        actions = self.controller.forward(self.batch, self.episode_step, deterministic=True)
+        actions = self.controller.forward(self.batch, self.episode_step, deterministic=self.deterministic)
         self.batch.update({"actions": actions}, ts=self.episode_step)
 
         self.returns.append(episode_return)
