@@ -20,7 +20,8 @@ class OffPGCritic(th.nn.Module):
         # self.fc_v1 = th.nn.Linear(critic_hidden_dim, critic_hidden_dim)
         # self.fc_v2 = th.nn.Linear(critic_hidden_dim, 1)
 
-        self.fc_a1 = th.nn.Linear(critic_hidden_dim + action_dim, critic_hidden_dim)
+        # 所有 agents 的 action 都加上，顺序： 自己 + 对手
+        self.fc_a1 = th.nn.Linear(critic_hidden_dim + action_dim * n_agents, critic_hidden_dim)
         self.fc_a2 = th.nn.Linear(critic_hidden_dim, 1)
 
     def forward(self, vnet_inputs, actions):

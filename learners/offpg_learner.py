@@ -143,6 +143,11 @@ class OffPGLearner:
             target_action.append(self.target_controller.forward(off_batch, t, deterministic=True).detach())
         # target_actions: (batch_size, episode_steps, n_agents, action_dim)
         target_actions = th.stack(target_action, dim=1)
+        # target_actions_opponent: (batch_size, episode_steps, n_agents, action_dim)
+        target_actions_opponent = target_actions.clone()[:, :, [1, 0], :]
+        # target_actions: (batch_size, episode_steps, n_agents, action_dim + action_dim)
+        target_actions = th.cat([target_actions, target_actions_opponent], dim=3)
+
         # target_q_locals: (batch_size, episode_steps, n_agents, 1)
         target_q_locals = self.target_critic(inputs, target_actions).detach()
         # target_q_total: (batch_size, episode_steps, 1)
@@ -151,7 +156,9 @@ class OffPGLearner:
         target_q_total = target_q_total * mask  # 无 terminated 的都有效，有 terminated 的，terminated 后一步无效
 
         # actor --> critic, rollout 得到的 actions 用在此处，所以不需要使用 actor
-        q_locals = self.critic(inputs, actions)
+        curr_actions_opponent = actions.clone()[:, :, [1, 0], :]
+        curr_actions = th.cat([actions.clone(), curr_actions_opponent], dim=3)
+        q_locals = self.critic(inputs, curr_actions)
         q_locals = q_locals.squeeze(3)
         q_total = self.mixer(q_locals, state, batch_size)
         q_total = q_total * mask  # terminated 的那一步是有效的，这一步的 r 要利用的
@@ -198,11 +205,14 @@ class OffPGLearner:
         self.training_count += 1
 
         # actor --> critic
-        action = []
+        action_gradient = []
         for t in range(max_episode_length):
-            action.append(self.controller.forward(off_batch, t, deterministic=True))
-        # actions: (batch_size, episode_steps, n_agents, action_dim)
-        actions = th.stack(action, dim=1)
+            action_gradient.append(self.controller.forward(off_batch, t, deterministic=True))
+        # actions_gradient: (batch_size, episode_steps, n_agents, action_dim)
+        actions_gradient = th.stack(action_gradient, dim=1)
+        # actions_gradient 与 actions 拼合
+        actions_opponent = actions.clone()[:, :, [1, 0], :]
+        actions = th.cat([actions_gradient, actions_opponent], dim=3)
         # q_locals: (batch_size, episode_steps, n_agents, 1)
         q_locals = self.critic(inputs, actions)
         # q_total: (batch_size, episode_steps, 1)
