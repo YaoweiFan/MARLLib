@@ -144,7 +144,7 @@ def run_sequential(args, logger):
 
         # train
         if off_buffer.can_sample(off_batch_size):
-            for _ in range(100):
+            for _ in range(10):
                 # sample
                 off_buffer_samples = off_buffer.uni_sample(off_batch_size)
                 off_buffer_samples.to(args.device)
