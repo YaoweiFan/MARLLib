@@ -215,7 +215,8 @@ class ParallelRunner:
                 # QUESTION: 对于失败停止和超步停止，需要进行区分吗？
                 # ANSWER: 失败停止，最后一步 t 在计算 td_lambda 的时候是用不上 Q(t+1) 的，超步停止则需要。
                 #         这里对超步的判断还是依赖于环境(dual_arm_env)所提供的信息的
-                post_transition_data["terminated"].append((data["terminated"] and not data["info"]["timeout"],))
+                post_transition_data["terminated"].append((data["terminated"] and not data["info"]["success"] and
+                                                           not data["info"]["timeout"],))
                 # 更新 episode_final_info，环境顺序无所谓
                 if data["terminated"]:
                     episode_final_info.append(data["info"])
