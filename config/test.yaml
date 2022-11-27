@@ -3,6 +3,7 @@ offpg_args:
   checkpoint_path: "results/models/offpg_dualarm__2022-11-03_15-45-58"
   runner: "episode"
   batch_size_run: 1
+  use_cuda: False
 
 evaluate_args:
   evaluate_n_episodes: 10
@@ -15,6 +16,7 @@ evaluate_args:
   ft_save_path: "ft"
   state_record: False
   state_save_path: "state"
+  show_q_value: "local"  # local or total
 
 env_args:
   # Mujoco 相关

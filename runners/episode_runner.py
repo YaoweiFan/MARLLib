@@ -3,10 +3,14 @@ from os.path import dirname
 import numpy as np
 import imageio
 import pandas as pd
+import torch as th
 
 from MARLLib.envs import ENV
 from MARLLib.utils.buffer import EpisodeBatch
 from MARLLib.utils.vec_normalize import VecNormalize
+
+from robotools.show_q_value_discrete import show_q_value_discrete
+from robotools.show_q_value_discrete_mix import show_q_value_discrete_mix
 
 
 class EpisodeRunner:
@@ -28,6 +32,7 @@ class EpisodeRunner:
         self.env = ENV[env](**env_args)
         env_info = self.get_env_info()
         self.episode_limit = env_info["episode_limit"]
+        self.vedo_env = env
 
         self.returns = []
         self.stats = {}
@@ -40,6 +45,7 @@ class EpisodeRunner:
         self.preprocess = None
         self.controller = None
         self.batch = None
+        self.learner = None
 
         self.checkpoint_path = os.path.join(dirname(dirname(dirname(__file__))), checkpoint_path)
 
@@ -52,6 +58,7 @@ class EpisodeRunner:
         self.path_record = evaluate_args["path_record"]
         self.path_save_dir = evaluate_args["path_save_path"]
         os.makedirs(os.path.join(self.checkpoint_path, self.path_save_dir), exist_ok=True)
+        self.show_q_value = evaluate_args["show_q_value"]
         # record ft
         self.ft_record = evaluate_args["ft_record"]
         self.ft_save_dir = evaluate_args["ft_save_path"]
@@ -72,6 +79,9 @@ class EpisodeRunner:
         self.preprocess = preprocess
         self.controller = controller
         self.controller = controller
+
+    def setup_learner(self, learner):
+        self.learner = learner
 
     def set_path_name(self, index):
         self.video_save_path = os.path.join(self.checkpoint_path, self.video_save_dir, "{}.avi".format(index))
@@ -113,6 +123,9 @@ class EpisodeRunner:
         # 记录路径点
         left_points = []
         right_points = []
+        # 记录 state, obs
+        state = []
+        obs = []
         # 记录路径点姿态
         left_eef_quaternion = []
         right_eef_quaternion = []
@@ -178,6 +191,11 @@ class EpisodeRunner:
                 # 记录 action
                 left_acts.append(actions[0][0])
                 right_acts.append(actions[0][1])
+                # 记录 state, obs
+                state.append(th.tensor(self.normalizer.normalize_state(self.env.get_state(), test_mode=True),
+                                       dtype=th.float32))
+                obs.append(th.tensor(self.normalizer.normalize_obs(self.env.get_obs(), test_mode=True),
+                                     dtype=th.float32))
 
             if self.ft_record:
                 left_ft_only.append(self.env.obs["robot0_ft"])
@@ -235,6 +253,46 @@ class EpisodeRunner:
                                       'left_acts': left_acts, 'right_acts': right_acts
                                       })
             dataframe.to_csv(self.path_save_path)
+
+            # show Q
+            critic = self.learner.critic
+            mixer = self.learner.mixer
+
+            # state: (episode_steps, state_dim)
+            state = th.stack(state, dim=0)
+            # obs: (episode_steps, n_agents, obs_dim)
+            obs = th.stack(obs, dim=0)
+            # inputs: (episode_steps, n_agents, state_dim+obs_dim+2)
+            inputs = [state.unsqueeze(1).repeat(1, 2, 1), obs, th.eye(2).unsqueeze(0).expand(self.episode_step, -1, -1)]
+            inputs = th.cat(inputs, dim=-1)
+            # q_locals: (episode_steps, 2, 7)
+            q_locals = critic(inputs).detach()
+
+            if self.show_q_value == "local":
+                show_q_value_discrete(left_points,
+                                      right_points,
+                                      q_locals.numpy()[:, 0, :],
+                                      q_locals.numpy()[:, 1, :],
+                                      self.episode_step,
+                                      self.vedo_env,
+                                      left_acts,
+                                      right_acts)
+
+            if self.show_q_value == "total":
+                mix_inputs = th.zeros(self.episode_step, 7, 7)
+                for i in range(7):
+                    for j in range(7):
+                        # comb: (1, episode_steps, 2)
+                        comb = th.stack([q_locals[:, 0, i], q_locals[:, 1, j]], dim=1).unsqueeze(0)
+                        mix_inputs[:, i, j] = mixer(comb, state.unsqueeze(0), 1).detach()[0, :, 0]
+
+                show_q_value_discrete_mix(left_points,
+                                          right_points,
+                                          mix_inputs,
+                                          self.episode_step,
+                                          self.vedo_env,
+                                          left_acts,
+                                          right_acts)
 
         # 结束 ft 记录
         if self.ft_record:

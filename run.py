@@ -27,7 +27,8 @@ def config_sanity_check_and_adjust(config, log):
         config["test_n_episodes"] = (config["test_n_episodes"] // config["batch_size_run"]) * config["batch_size_run"]
 
 
-def evaluate_only(args, runner):
+def evaluate_only(args, runner, learner):
+    runner.setup_learner(learner)
     for i in range(args.evaluate_args["evaluate_n_episodes"]):
         runner.set_path_name(i)
         runner.set_steps(runner.steps)
@@ -120,7 +121,7 @@ def run_sequential(args, logger):
     # 仅仅是 evaluate policy
     if args.evaluate:
         assert args.checkpoint_path != "", "evaluate but the model path is empty!"
-        evaluate_only(args, runner)
+        evaluate_only(args, runner, learner)
         return
 
     # 开始训练
