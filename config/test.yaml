@@ -6,6 +6,7 @@ offpg_args:
 
 evaluate_args:
   evaluate_n_episodes: 10
+  deterministic_policy: false
   video_record: False
   skip_frame: 1
   video_save_path: "video"

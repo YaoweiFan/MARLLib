@@ -47,7 +47,7 @@ class OffPGLearner:
         self.target_critic = copy.deepcopy(self.critic)
 
         self.target_controller = copy.deepcopy(self.controller)
-        self.target_controller.cuda()
+        # self.target_controller.cuda()
 
         # optimiser
         self.agent_params = list(self.controller.parameters())
