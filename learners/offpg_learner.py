@@ -268,6 +268,8 @@ class OffPGLearner:
         grad_norm = clip_grad_norm(self.agent_params, self.grad_norm_clip)
         self.agent_optimiser.step()
 
+        critic_running_log["log_std"].append(self.controller.log_std[0].item())
+
         if (total_steps - self.last_actor_training_log_step > self.learner_log_interval) or \
                 (self.last_actor_training_log_step == -1):
             for key, value in critic_running_log.items():
