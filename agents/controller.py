@@ -71,7 +71,10 @@ class Controller:
         actions = distribution.get_actions(deterministic=deterministic)
         # 对输出动作作限制
         actions = th.clamp(actions, -1, 1)
-        return actions.reshape(ep_batch.batch_size, self.n_agents, -1)[avail_env]
+        # old_log_prob: (batch_size_run * n_agents, )
+        old_log_prob = distribution.log_prob(actions)
+        return actions.reshape(ep_batch.batch_size, self.n_agents, -1)[avail_env], \
+            old_log_prob.reshape(ep_batch.batch_size, self.n_agents, -1)[avail_env]
 
     def evaluate_actions(self, ep_batch, episode_step):
         # inputs: (batch_size_run * n_agents, obs_size+last_action_dim+agent_id_size)

@@ -167,7 +167,10 @@ class ParallelRunner:
         episode_final_info = []
         # rollout
         while True:
-            actions = self.controller.forward(self.batch, self.episode_step, avail_env, deterministic=False)
+            actions, old_log_prob = self.controller.forward(self.batch,
+                                                            self.episode_step,
+                                                            avail_env,
+                                                            deterministic=False)
             # actions 增加的维度在 episode_step 上
             # QUESTION: mark_filled 有什么用处？
             # ANSWER: terminated 用来表明环境因失败终止
@@ -175,7 +178,7 @@ class ParallelRunner:
             #         2. 若不存在 terminated[t] == True, 超时或是成功，最后一步的 Q(t+1) 需要计算
             #         mark_filled 可以不要，使用 mark_filled 可以方便计算
             self.batch.update({"actions": actions}, avail_env, self.episode_step, mark_filled=False)
-            # self.batch.update({"log_prob": log_prob}, avail_env, self.episode_step, mark_filled=False)
+            self.batch.update({"old_log_prob": old_log_prob}, avail_env, self.episode_step, mark_filled=False)
             last_avail_env = avail_env.copy()
 
             # 更新下一步的 avail_env
@@ -215,8 +218,7 @@ class ParallelRunner:
                 # QUESTION: 对于失败停止和超步停止，需要进行区分吗？
                 # ANSWER: 失败停止，最后一步 t 在计算 td_lambda 的时候是用不上 Q(t+1) 的，超步停止则需要。
                 #         这里对超步的判断还是依赖于环境(dual_arm_env)所提供的信息的
-                post_transition_data["terminated"].append((data["terminated"] and not data["info"]["success"] and
-                                                           not data["info"]["timeout"],))
+                post_transition_data["terminated"].append((data["terminated"] and not data["info"]["timeout"],))
                 # 更新 episode_final_info，环境顺序无所谓
                 if data["terminated"]:
                     episode_final_info.append(data["info"])

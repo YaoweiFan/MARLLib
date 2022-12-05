@@ -47,7 +47,7 @@ def run_sequential(args, logger):
         "state": {"vshape": env_info["state_shape"]},
         "obs": {"vshape": env_info["obs_shape"], "group": "agents"},
         "actions": {"vshape": env_info["action_dim"], "group": "agents"},
-        "log_prob": {"vshape": (1,), "group": "agents"},
+        "old_log_prob": {"vshape": (1,), "group": "agents"},
         "reward": {"vshape": (1,)},
         "terminated": {"vshape": (1,), "dtype": th.uint8},
     }
@@ -58,7 +58,10 @@ def run_sequential(args, logger):
 
     on_buffer = ReplayBuffer(scheme, groups, args.on_buffer_size, env_info["episode_limit"]+1,
                              preprocess=preprocess, device="cpu" if args.buffer_cpu_only else args.device)
+    off_buffer = ReplayBuffer(scheme, groups, args.off_buffer_size, env_info["episode_limit"]+1,
+                              preprocess=preprocess, device="cpu" if args.buffer_cpu_only else args.device)
     on_batch_size = args.on_batch_size
+    off_batch_size = args.off_batch_size
 
     # 创建 controller
     controller = Controller(on_buffer.scheme, env_info["n_agents"], args.obs_last_action, args.obs_agent_id,
@@ -134,18 +137,20 @@ def run_sequential(args, logger):
         # rollout， 每个子进程走完一个 episode
         episode_batch = runner.rollout(test_mode=False)
         on_buffer.insert_episode_batch(episode_batch)
+        off_buffer.insert_episode_batch(episode_batch)
 
         # train
-        if on_buffer.can_sample(on_batch_size):
+        if on_buffer.can_sample(on_batch_size) and off_buffer.can_sample(off_batch_size):
             # train critic
             on_buffer_samples = on_buffer.uni_sample(on_batch_size)
             on_buffer_samples.to(args.device)
-            # off_buffer_samples = off_buffer.uni_sample(off_batch_size)
-            # off_buffer_samples.to(args.device)
+            off_buffer_samples = off_buffer.uni_sample(off_batch_size)
+            off_buffer_samples.to(args.device)
             # 获得 samples 中最长 episode 的长度
-            max_episode_length = max(on_buffer_samples.max_t_filled())
-            # stochastic continuous 训练 critic 时暂时不考虑使用 off_buffer，off_buffer 的代码存在问题（评估时要采用新策略）
-            learner.train_critic(on_buffer_samples[:, :max_episode_length], critic_running_log)
+            max_episode_length = max(on_buffer_samples.max_t_filled(), off_buffer_samples.max_t_filled())
+            learner.train_critic(on_buffer_samples[:, :max_episode_length],
+                                 off_buffer_samples[:, :max_episode_length],
+                                 critic_running_log)
 
             # train actor
             # 只选取用当前策略跑出来的 on_batch_size 个 episode，确保 on_policy 训练 actor 
