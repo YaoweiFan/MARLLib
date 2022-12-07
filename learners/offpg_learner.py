@@ -25,6 +25,7 @@ class OffPGLearner:
                  optim_eps,
                  gamma,
                  td_lambda,
+                 tb_lambda,
                  grad_norm_clip,
                  target_update_interval,
                  learner_log_interval,
@@ -38,6 +39,7 @@ class OffPGLearner:
         self.state_dim = scheme["state"]["vshape"]
         self.gamma = gamma
         self.td_lambda = td_lambda
+        self.tb_lambda = tb_lambda
         self.grad_norm_clip = grad_norm_clip
         self.target_update_interval = target_update_interval
         self.learner_log_interval = learner_log_interval
@@ -177,7 +179,7 @@ class OffPGLearner:
         for _ in range(self.tree_backup_step):
             tree_backup += coefficient * tmp
             tmp = th.cat(((tmp * c)[:, 1:, :], padding), dim=1)
-            coefficient *= self.gamma * self.td_lambda
+            coefficient *= self.gamma * self.tb_lambda
         tree_backup += target_q_total[:, :-1, :]
         return inputs, state, actions, mask, tree_backup, max_episode_length
 
