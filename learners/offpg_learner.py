@@ -143,7 +143,6 @@ class OffPGLearner:
 
         # 在 evaluate_actions 中 forward 得到 log_prob，buffer 中的没法用，因为是转换成 numpy 后存储的
         log_prob = []
-        self.controller.init_hidden(batch_size)
         for t in range(max_episode_length - 1):
             log_prob.append(self.controller.evaluate_actions(off_batch, t).detach())
         # log_prob: (batch_size, episode_steps-1, n_agents, 1)
@@ -155,15 +154,20 @@ class OffPGLearner:
 
         # inputs: (batch_size, episode_steps, n_agents, state_dim+obs_dim+n_agents)
         inputs = self._build_critic_inputs(state, obs, batch_size, max_episode_length, device)
-        target_q_locals, expected_q_locals = self.target_critic(inputs, actions)
 
         # 计算 expected_q_total
+        current_action = []
+        for t in range(max_episode_length):
+            current_action.append(self.controller.forward(off_batch, t, deterministic=True).detach())
+        # current_actions: (batch_size, episode_steps, n_agents, action_dim)
+        current_actions = th.stack(current_action, dim=1)
+        expected_q_locals = self.target_critic(inputs, current_actions)
         expected_q_total = self.target_mixer(expected_q_locals.detach(), state, batch_size).detach()
         expected_q_total[:, -1, :] = expected_q_total[:, -1, :] * (1 - th.sum(terminated, dim=1))
         expected_q_total[:, :-1, :] = expected_q_total[:, :-1, :] * mask
 
         # 计算 target_q_total
-        target_q_locals = target_q_locals.detach().squeeze(3)
+        target_q_locals = self.target_critic(inputs, actions).detach().squeeze(3)
         target_q_total = self.target_mixer(target_q_locals, state, batch_size).detach()
         # 不需要处理 target_q_total 最后一个 mask 与否，因为用不到
         # target_q_total[:, -1, :] = target_q_total[:, -1, :] * (1 - th.sum(terminated, dim=1))
@@ -180,7 +184,7 @@ class OffPGLearner:
             tree_backup += coefficient * tmp
             tmp = th.cat(((tmp * c)[:, 1:, :], padding), dim=1)
             coefficient *= self.gamma * self.tb_lambda
-        tree_backup += target_q_total[:, :-1, :]
+        tree_backup += target_q_total[:, :-1, :] * mask
         return inputs, state, actions, mask, tree_backup, max_episode_length
 
     def train_critic(self, on_batch: EpisodeBatch, off_batch: EpisodeBatch, critic_running_log):
@@ -213,7 +217,7 @@ class OffPGLearner:
 
         # 计算 target
         # target_q_locals: (batch_size, episode_steps, n_agents, 1)
-        target_q_locals, _ = self.target_critic(inputs, actions)
+        target_q_locals = self.target_critic(inputs, actions)
         target_q_locals = target_q_locals.squeeze(3).detach()
         target_q_total = self.target_mixer(target_q_locals, state, batch_size).detach()
         g_lambda = self._build_td_lambda_targets(rewards, terminated, mask, target_q_total).detach()
@@ -236,7 +240,7 @@ class OffPGLearner:
             assert mask_t.sum() > 0.9, "max_episode_length is not correct!"
 
             # q_locals: (batch_size, 1, n_agents)
-            q_locals, _ = self.critic(inputs[:, t:t+1, :, :], actions[:, t:t+1, :, :])
+            q_locals = self.critic(inputs[:, t:t+1, :, :], actions[:, t:t+1, :, :])
             q_locals = q_locals.squeeze(3)
             q_total = self.mixer(q_locals, state[:, t:t+1, :], batch_size)
             q_total_target = g_lambda[:, t:t+1, :]
@@ -301,19 +305,14 @@ class OffPGLearner:
 
         # inputs: (batch_size, episode_steps, n_agents, state_dim+obs_dim+n_agents)
         inputs = self._build_critic_inputs(state, obs, batch_size, max_episode_length, device)
-        q_locals, expected_q_locals = self.critic(inputs, actions)
+        q_locals = self.critic(inputs, actions)
         q_locals = q_locals.detach().squeeze(3)[:, :-1, :]
-        expected_q_locals = expected_q_locals.detach().squeeze(3)[:, :-1, :]
-
-        # 计算 baseline: 一维向量, batch_size * max_episode_length-1 * n_agents
-        baseline = expected_q_locals.reshape(-1)
 
         # 计算 advantages: 一维向量, batch_size * max_episode_length * n_agents
-        advantages = q_locals.reshape(-1) - baseline
+        advantages = q_locals.reshape(-1)
 
         # 在 evaluate_actions 中 forward 得到 log_prob，buffer 中的没法用，因为是转换成 numpy 后存储的
         log_prob = []
-        self.controller.init_hidden(batch_size)
         for t in range(max_episode_length - 1):
             log_prob.append(self.controller.evaluate_actions(batch, t))
         # log_prob: (batch_size, episode_steps-1, n_agents, 1)

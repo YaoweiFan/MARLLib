@@ -93,7 +93,6 @@ class EpisodeRunner:
 
         terminated = False
         episode_return = 0
-        self.controller.init_hidden(batch_size=self.batch_size)
 
         # 记录视频
         writer = imageio.get_writer(self.video_save_path, fps=20)

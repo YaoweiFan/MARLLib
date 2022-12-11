@@ -158,7 +158,6 @@ class ParallelRunner:
 
     def rollout(self, test_mode):
         self.reset(test_mode)
-        self.controller.init_hidden(self.batch_size_run)
 
         episode_reward = [0 for _ in range(self.batch_size_run)]
         episode_length = [0 for _ in range(self.batch_size_run)]

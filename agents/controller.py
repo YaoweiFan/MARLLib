@@ -5,7 +5,7 @@ import math
 from itertools import chain
 
 from MARLLib.utils.distributions import DiagGaussianDistribution
-from .rnn_agent import RNNAgent
+from .fc_agent import FcAgent
 
 
 class Controller:
@@ -32,14 +32,10 @@ class Controller:
         if obs_agent_id:
             input_shape += self.n_agents
         # 创建 agent
-        self.agent = RNNAgent(input_shape, rnn_hidden_dim, action_dim)
-        self.hidden_states = None
+        self.agent = FcAgent(input_shape, rnn_hidden_dim, action_dim)
         # 创建 action 采样 distribution
         self.action_distribution = DiagGaussianDistribution(action_dim)
         self.log_std = th.nn.Parameter(th.ones(self.action_dim) * log_std_init, requires_grad=False)
-
-    def init_hidden(self, batch_size):
-        self.hidden_states = self.agent.init_hidden().unsqueeze(0).unsqueeze(0).expand(batch_size, self.n_agents, -1)
 
     def _build_inputs(self, ep_batch, episode_step):
         """
@@ -61,11 +57,11 @@ class Controller:
         inputs = th.cat([item.reshape(ep_batch.batch_size * self.n_agents, -1) for item in inputs], dim=1)
         return inputs
 
-    def forward(self, ep_batch, episode_step, avail_env, deterministic):
+    def forward(self, ep_batch, episode_step, avail_env=slice(None), deterministic=False):
         # inputs: (batch_size_run * n_agents, obs_size+last_action_dim+agent_id_size)
         inputs = self._build_inputs(ep_batch, episode_step)
         # mean_actions: (batch_size_run * n_agents, action_dim)
-        mean_actions, self.hidden_states = self.agent(inputs, self.hidden_states)
+        mean_actions = self.agent(inputs)
         distribution = self.action_distribution.proba_distribution(mean_actions, self.log_std)
         # 若 deterministic == True，意味着 action 选择的直接是 mean action
         actions = distribution.get_actions(deterministic=deterministic)
@@ -73,14 +69,17 @@ class Controller:
         actions = th.clamp(actions, -1, 1)
         # old_log_prob: (batch_size_run * n_agents, )
         old_log_prob = distribution.log_prob(actions)
-        return actions.reshape(ep_batch.batch_size, self.n_agents, -1)[avail_env], \
-            old_log_prob.reshape(ep_batch.batch_size, self.n_agents, -1)[avail_env]
+        if deterministic:
+            return actions.reshape(ep_batch.batch_size, self.n_agents, -1)[avail_env]
+        else:
+            return actions.reshape(ep_batch.batch_size, self.n_agents, -1)[avail_env], \
+                old_log_prob.reshape(ep_batch.batch_size, self.n_agents, -1)[avail_env]
 
     def evaluate_actions(self, ep_batch, episode_step):
         # inputs: (batch_size_run * n_agents, obs_size+last_action_dim+agent_id_size)
         inputs = self._build_inputs(ep_batch, episode_step)
         # mean_actions: (batch_size_run * n_agents, action_dim)
-        mean_actions, self.hidden_states = self.agent(inputs, self.hidden_states)
+        mean_actions = self.agent(inputs)
         distribution = self.action_distribution.proba_distribution(mean_actions, self.log_std)
         actions = ep_batch["actions"][:, episode_step].reshape(ep_batch.batch_size*self.n_agents, -1)
         # log_prob: (batch_size_run * n_agents, )
