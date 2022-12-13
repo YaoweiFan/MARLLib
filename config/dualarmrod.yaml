@@ -1,9 +1,9 @@
 # 算法相关
 seed: null
-reward_shaping: False
-reward_mimic: True
-reward_success: 200
-reward_defeat: -200
+reward_shaping: True
+reward_mimic: False
+reward_success: 800
+reward_defeat: 0
 reward_scale: 3.0
 #state_last_action: True # False: critic adds last action internally
 #state_timestep_number: False
@@ -24,7 +24,7 @@ object_state_size: 19
 n_agents: 2
 n_actions: 7
 obs_choose: "noft"
-trajectory_data_path: "data/trajectory.csv"
+trajectory_data_path: "data/rod_trajectory.csv"
 ms_xl: -0.25
 ms_xh: 0.25
 ms_yl: -0.3
