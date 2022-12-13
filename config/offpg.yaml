@@ -1,7 +1,7 @@
 # --- MARLLib options ---
 runner: "parallel" # Runs 1 env for an episode
 mac: "basic_mac" # Basic controller
-env: "dualarm" # Environment name
+env: "dualarmrod" # Environment name
 env_args: {} # Arguments for the environment
 batch_size_run: 16 # Number of environments to run in parallel
 test_n_episodes: 32 # Number of episodes to test for (最好是 batch_size_run 的倍数)
