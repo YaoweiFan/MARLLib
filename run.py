@@ -58,10 +58,7 @@ def run_sequential(args, logger):
 
     on_buffer = ReplayBuffer(scheme, groups, args.on_buffer_size, env_info["episode_limit"]+1,
                              preprocess=preprocess, device="cpu" if args.buffer_cpu_only else args.device)
-    off_buffer = ReplayBuffer(scheme, groups, args.off_buffer_size, env_info["episode_limit"]+1,
-                              preprocess=preprocess, device="cpu" if args.buffer_cpu_only else args.device)
     on_batch_size = args.on_batch_size
-    off_batch_size = args.off_batch_size
 
     # 创建 controller
     controller = Controller(on_buffer.scheme, env_info["n_agents"], args.obs_last_action, args.obs_agent_id,
@@ -74,8 +71,8 @@ def run_sequential(args, logger):
     learner = OffPGLearner(on_buffer.scheme, env_info["action_dim"], env_info["n_agents"], args.critic_hidden_dim,
                            controller, logger, args.mixing_embed_dim, args.actor_learning_rate,
                            args.critic_learning_rate, args.mixer_learning_rate, args.optim_alpha, args.optim_eps,
-                           args.gamma, args.td_lambda, args.tb_lambda, args.grad_norm_clip, args.target_update_interval,
-                           args.learner_log_interval, args.tree_backup_step)
+                           args.gamma, args.td_lambda, args.grad_norm_clip, args.target_update_interval,
+                           args.learner_log_interval)
 
     # use cuda
     if args.use_cuda:
@@ -137,20 +134,15 @@ def run_sequential(args, logger):
         # rollout， 每个子进程走完一个 episode
         episode_batch = runner.rollout(test_mode=False)
         on_buffer.insert_episode_batch(episode_batch)
-        off_buffer.insert_episode_batch(episode_batch)
 
         # train
-        if on_buffer.can_sample(on_batch_size) and off_buffer.can_sample(off_batch_size):
+        if on_buffer.can_sample(on_batch_size):
             # train critic
             on_buffer_samples = on_buffer.uni_sample(on_batch_size)
             on_buffer_samples.to(args.device)
-            off_buffer_samples = off_buffer.uni_sample(off_batch_size)
-            off_buffer_samples.to(args.device)
             # 获得 samples 中最长 episode 的长度
-            max_episode_length = max(on_buffer_samples.max_t_filled(), off_buffer_samples.max_t_filled())
-            learner.train_critic(on_buffer_samples[:, :max_episode_length],
-                                 off_buffer_samples[:, :max_episode_length],
-                                 critic_running_log)
+            max_episode_length = on_buffer_samples.max_t_filled()
+            learner.train_critic(on_buffer_samples[:, :max_episode_length], critic_running_log)
 
             # train actor
             # 只选取用当前策略跑出来的 on_batch_size 个 episode，确保 on_policy 训练 actor 
