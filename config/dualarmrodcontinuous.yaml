@@ -23,7 +23,7 @@ object_state_size: 19
 n_agents: 2
 action_dim: 3
 obs_choose: "noft"
-trajectory_data_path: "data/trajectory.csv"
+trajectory_data_path: "data/rod_trajectory.csv"
 # Mujoco 相关
 has_renderer: True
 has_offscreen_renderer: False
