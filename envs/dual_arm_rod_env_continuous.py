@@ -1,26 +1,17 @@
 import os
 from os.path import dirname
-import enum
 from absl import logging  # information print
 from robosuite.controllers import load_controller_config
 import robosuite as suite
 import numpy as np
 import pandas as pd
+
 from robosuite.environments.robot_env import RobotEnv
 
 from .multi_agent_env import MultiAgentEnv
 
 
-class Direction(enum.IntEnum):
-    FRONT = 0
-    BEHIND = 1
-    LEFT = 2
-    RIGHT = 3
-    UP = 4
-    DOWN = 5
-
-
-class DualArmEnv(MultiAgentEnv):
+class DualArmRodContinuousEnv(MultiAgentEnv):
     """Dual-arm assemble environment for decentralised multi-agent coordination scenarios."""
 
     def __init__(
@@ -45,15 +36,9 @@ class DualArmEnv(MultiAgentEnv):
             robot_state_size,
             object_state_size,
             n_agents,
-            n_actions,
+            action_dim,
             obs_choose,
             trajectory_data_path,
-            ms_xl,
-            ms_xh,
-            ms_yl,
-            ms_yh,
-            ms_zl,
-            ms_zh,
 
             has_renderer,
             has_offscreen_renderer,
@@ -91,18 +76,10 @@ class DualArmEnv(MultiAgentEnv):
 
         # Action
         self.last_action = None
-        self.n_actions = n_actions
+        self.action_dim = action_dim
 
         # Agents
         self.n_agents = n_agents
-
-        # Range
-        self.ms_xl = ms_xl
-        self.ms_xh = ms_xh
-        self.ms_yl = ms_yl
-        self.ms_yh = ms_yh
-        self.ms_zl = ms_zl
-        self.ms_zh = ms_zh
 
         # Rewards
         self.reward_shaping = reward_shaping
@@ -136,7 +113,7 @@ class DualArmEnv(MultiAgentEnv):
 
     def _launch(self):
         """Launch the Dual-arm assemble environment."""
-        options = {"env_name": "TwoArmAssemble", "env_configuration": "single-arm-parallel", "robots": []}
+        options = {"env_name": "TwoArmRod", "env_configuration": "single-arm-parallel", "robots": []}
         for i in range(self.n_agents):
             options["robots"].append("Panda")
         controller_name = "OSC_POSITION"
@@ -167,10 +144,7 @@ class DualArmEnv(MultiAgentEnv):
             self._launch()
         self.obs = self.env.reset()
 
-        self.last_action = np.zeros((self.n_agents, self.n_actions))
-
-        if self.debug:
-            logging.debug("Started Episode {}".format(self.episode_count).center(60, "*"))
+        self.last_action = np.zeros((self.n_agents, self.action_dim))
 
     def _mimic_reward(self):
         """Return mimic reward."""
@@ -198,31 +172,15 @@ class DualArmEnv(MultiAgentEnv):
         return 10 * mimic_reward
 
     def step(self, actions):
-        """A single environment step. Returns reward, terminated, info."""
-        actions_int = [int(a) for a in actions]
-        self.last_action = np.eye(self.n_actions)[np.array(actions_int)]
+        """A single environment step. Returns reward, terminated, info.
+        actions: np.ndarray (n_agents, action_dim)
+        """
+        # last_action 更新
+        self.last_action = actions.copy()
 
-        # Collect individual actions
-        sc_actions = []
-        if self.debug:
-            logging.debug("Actions".center(60, "-"))
-
-        for a_id, action in enumerate(actions_int):
-            sc_action = self.get_agent_action(a_id, action)
-            sc_actions.append(sc_action)
-
-        # Execute actions
-        # sc_actions = np.array([np.array([0,0.2,0,-1]), np.array([0,0,0,-1])])
-        # 步长设置  
-        sac = np.array(sc_actions).reshape(-1)
-
-        # # debug code
-        # while True:
-        #     self.env.step(sac)
-        #     self.render()
-        #     # sleep(1)
-
-        self.obs, reward, terminated, info = self.env.step(sac)
+        grab_actions = np.array([[1], [1]])
+        united_actions = np.concatenate((actions, grab_actions), axis=1).reshape(-1)
+        self.obs, reward, terminated, info = self.env.step(united_actions)
         self.render()
 
         if self.reward_mimic:
@@ -239,9 +197,9 @@ class DualArmEnv(MultiAgentEnv):
             self.assemble_game += 1
             if info["success"]:
                 self.assemble_success += 1
-                reward += self.reward_success * (1 - self.reward_shaping)
+                reward += self.reward_success
             if info["defeat"]:
-                reward += self.reward_defeat * (1 - self.reward_shaping)
+                reward += self.reward_defeat
 
         if self.debug:
             logging.debug("Reward = {}".format(reward).center(60, '-'))
@@ -282,7 +240,7 @@ class DualArmEnv(MultiAgentEnv):
                     self.obs[prefix + "eef_pos"],
                     self.obs[prefix + "eef_quat"],
                     self.obs[prefix + "peg_pos"],
-                    self.obs[prefix + "peg_to_hole"],
+                    self.obs[prefix + "peg_to_rod_top"],
                 )
             )
         elif self.obs_choose == "noeef":
@@ -290,7 +248,7 @@ class DualArmEnv(MultiAgentEnv):
                 (
                     self.obs[prefix + "eef_ft"],
                     self.obs[prefix + "peg_pos"],
-                    self.obs[prefix + "peg_to_hole"],
+                    self.obs[prefix + "peg_to_rod_top"],
                 )
             )
         elif self.obs_choose == "nopegpos":
@@ -299,7 +257,7 @@ class DualArmEnv(MultiAgentEnv):
                     self.obs[prefix + "eef_pos"],
                     self.obs[prefix + "eef_quat"],
                     self.obs[prefix + "eef_ft"],
-                    self.obs[prefix + "peg_to_hole"],
+                    self.obs[prefix + "peg_to_rod_top"],
                 )
             )
         else:
@@ -309,11 +267,10 @@ class DualArmEnv(MultiAgentEnv):
                     # self.obs[prefix + "joint_vel"],
                     self.obs[prefix + "eef_pos"],
                     self.obs[prefix + "eef_quat"],
-                    # self.obs[prefix + "eef_ft"],
-                    # np.array([0, 0, 0, 0, 0, 0]),
-                    self.obs[prefix + "ft"],
+                    self.obs[prefix + "eef_ft"],
+                    # self.obs[prefix + "ft"],
                     self.obs[prefix + "peg_pos"],
-                    self.obs[prefix + "peg_to_hole"],
+                    self.obs[prefix + "peg_to_rod_top"],
                 )
             )
 
@@ -322,8 +279,6 @@ class DualArmEnv(MultiAgentEnv):
 
         if self.debug:
             logging.debug("Obs Robot: {}".format(agent_id).center(60, "-"))
-            logging.debug("Avail. actions {}".format(
-                self.get_avail_agent_actions(agent_id)))
             logging.debug("Joint position {}".format(self.obs[prefix + "joint_pos"]))
             logging.debug("Joint velocity {}".format(self.obs[prefix + "joint_vel"]))
             logging.debug("EEF position {}".format(self.obs[prefix + "eef_pos"]))
@@ -348,112 +303,6 @@ class DualArmEnv(MultiAgentEnv):
         )
         return state
 
-    def get_agent_action(self, a_id, action):
-        """Construct the action for agent a_id."""
-        avail_actions = self.get_avail_agent_actions(a_id)
-        if avail_actions[action] == 0:
-            assert avail_actions[action] == 1, "Agent {} cannot perform action {}".format(a_id, action)
-
-        if action == 0:
-            # stop
-            robo_act = np.array([0, 0, 0, 1])
-            if self.debug:
-                logging.debug("Agent {}: Stop".format(a_id))
-
-        elif action == 1:
-            # move front
-            robo_act = np.array([1, 0, 0, 1])
-            if self.debug:
-                logging.debug("Agent {}: Move Front".format(a_id))
-
-        elif action == 2:
-            # move behind
-            robo_act = np.array([-1, 0, 0, 1])
-            if self.debug:
-                logging.debug("Agent {}: Move Behind".format(a_id))
-
-        elif action == 3:
-            # move left
-            robo_act = np.array([0, -1, 0, 1])
-            if self.debug:
-                logging.debug("Agent {}: Move Left".format(a_id))
-
-        elif action == 4:
-            # move right
-            robo_act = np.array([0, 1, 0, 1])
-            if self.debug:
-                logging.debug("Agent {}: Move Right".format(a_id))
-
-        elif action == 5:
-            # move up
-            robo_act = np.array([0, 0, 1, 1])
-            if self.debug:
-                logging.debug("Agent {}: Move Up".format(a_id))
-
-        else:
-            # move down
-            robo_act = np.array([0, 0, -1, 1])
-            if self.debug:
-                logging.debug("Agent {}: Move Down".format(a_id))
-
-        return robo_act
-
-    def get_avail_agent_actions(self, agent_id):
-        """Returns the available actions for agent_id."""
-        avail_actions = [0] * self.n_actions
-        # stop should be allowed
-        avail_actions[0] = 1
-
-        # see if we can move
-        if self.can_move(agent_id, Direction.FRONT):
-            avail_actions[1] = 1
-        if self.can_move(agent_id, Direction.BEHIND):
-            avail_actions[2] = 1
-        if self.can_move(agent_id, Direction.LEFT):
-            avail_actions[3] = 1
-        if self.can_move(agent_id, Direction.RIGHT):
-            avail_actions[4] = 1
-        if self.can_move(agent_id, Direction.UP):
-            avail_actions[5] = 1
-        if self.can_move(agent_id, Direction.DOWN):
-            avail_actions[6] = 1
-
-        return avail_actions
-
-    def get_avail_actions(self):
-        """Returns the available actions of all agents in a list."""
-        avail_actions = []
-        for agent_id in range(self.n_agents):
-            avail_agent = self.get_avail_agent_actions(agent_id)
-            avail_actions.append(avail_agent)
-        return avail_actions
-
-    def can_move(self, agent_id, direction):
-        """Whether a robot can move in a given direction.
-        This function assumes that self.obs is up-to-date.
-        """
-        assert isinstance(self.env, RobotEnv)
-        prefix = self.env.robots[agent_id].robot_model.naming_prefix
-        posx, posy, posz = self.obs[prefix + "eef_pos"]
-
-        if direction == Direction.FRONT:
-            return posx <= self.ms_xh
-
-        if direction == Direction.BEHIND:
-            return posx >= self.ms_xl
-
-        if direction == Direction.RIGHT:
-            return posy <= self.ms_yh
-
-        if direction == Direction.LEFT:
-            return posy >= self.ms_yl
-
-        if direction == Direction.UP:
-            return posz <= self.ms_zh
-
-        if direction == Direction.DOWN:
-            return posz >= self.ms_zl
-
     def get_state_size(self):
         """Returns the size of the global state."""
         return self.robot_state_size * 2 + self.object_state_size
@@ -468,9 +317,17 @@ class DualArmEnv(MultiAgentEnv):
             return self.eef_pos_size + self.eef_quat_size + self.ft_size + self.peg_to_hole_size
         return self.eef_pos_size + self.eef_quat_size + self.ft_size + self.peg_pos_size + self.peg_to_hole_size
 
+    def get_avail_actions(self):
+        # Continuous environment, forbid to use this method
+        raise Exception("Continuous environment, forbid to use this method!")
+
+    def get_avail_agent_actions(self, agent_id):
+        # Continuous environment, forbid to use this method
+        raise Exception("Continuous environment, forbid to use this method!")
+
     def get_total_actions(self):
-        """Returns the total number of actions an agent could ever take."""
-        return self.n_actions
+        """Returns the dim of actions an agent could ever take."""
+        return self.action_dim
 
     def render(self):
         """Render"""
@@ -492,7 +349,7 @@ class DualArmEnv(MultiAgentEnv):
     def get_env_info(self):
         env_info = {"state_shape": self.get_state_size(),
                     "obs_shape": self.get_obs_size(),
-                    "n_actions": self.get_total_actions(),
+                    "action_dim": self.get_total_actions(),
                     "n_agents": self.n_agents,
                     "episode_limit": self.episode_limit}
         return env_info

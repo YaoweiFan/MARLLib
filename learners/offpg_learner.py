@@ -51,7 +51,6 @@ class OffPGLearner:
         self.mixer = QMixer(n_agents, self.state_dim, mixing_embed_dim)
         self.target_mixer = copy.deepcopy(self.mixer)
         self.target_controller = copy.deepcopy(self.controller)
-        # self.target_controller.cuda()
 
         # optimiser
         self.agent_params = list(self.controller.parameters())
@@ -88,6 +87,8 @@ class OffPGLearner:
         self.mixer.cuda()
         self.target_critic.cuda()
         self.target_mixer.cuda()
+        self.controller.cuda()
+        self.target_controller.cuda()
 
     def save_models(self, path):
         th.save(self.critic.state_dict(), "{}/critic.th".format(path))

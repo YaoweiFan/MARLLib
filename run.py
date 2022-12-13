@@ -80,7 +80,7 @@ def run_sequential(args, logger):
 
     # use cuda
     if args.use_cuda:
-        controller.cuda()
+        # 包括调用 controller.cuda()
         learner.cuda()
 
     # 从最近的 checkpoint 恢复
