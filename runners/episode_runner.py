@@ -73,6 +73,8 @@ class EpisodeRunner:
         self.ft_save_path = None
         self.state_save_path = None
 
+        self.success_time = 0
+
     def setup(self, scheme, groups, preprocess, controller):
         self.scheme = scheme
         self.groups = groups
@@ -170,6 +172,9 @@ class EpisodeRunner:
                 "reward": [(reward,)],
                 "terminated": [(terminated and not info["timeout"],)],
             }
+
+            if info["success"] == True:
+                self.success_time += 1
 
             self.batch.update(post_transition_data, ts=self.episode_step)
 

@@ -1,28 +1,35 @@
 offpg_args:
   evaluate: True
-  checkpoint_path: "results/models/offpg_dualarm__2022-11-03_15-45-58"
+  checkpoint_path: "results/models/discrete/offpg_dualarm__2022-11-01_22-16-42"
   runner: "episode"
   batch_size_run: 1
   use_cuda: False
+  # test_greedy: True
+  test_greedy: False
 
 evaluate_args:
-  evaluate_n_episodes: 10
+  evaluate_n_episodes: 100
   video_record: True
-  skip_frame: 1
-  video_save_path: "video"
-  path_record: False
-  path_save_path: "path"
-  ft_record: False
-  ft_save_path: "ft"
-  state_record: False
-  state_save_path: "state"
-  show_q_value: "local"  # local or total
+  skip_frame: 1  # record every frame
+  # video_save_path: "fix_deterministic_video"
+  video_save_path: "fix_stochastic_video"
+  path_record: True
+  # path_save_path: "fix_deterministic_path"
+  path_save_path: "fix_stochastic_path"
+  ft_record: True
+  # ft_save_path: "fix_deterministic_ft"
+  ft_save_path: "fix_stochastic_ft"
+  state_record: True
+  # state_save_path: "fix_deterministic_state"
+  state_save_path: "fix_stochastic_state"
+  show_q_value: ""  # local or total
 
 env_args:
   # Mujoco 相关
-#  has_renderer: True
+  has_renderer: False
   has_offscreen_renderer: True
-  camera_name: "sideview"
+  # camera_name: "sideview"
+  camera_name: "frontview"
   use_camera_obs: True
   camera_heights: 1024
   camera_widths: 1024
