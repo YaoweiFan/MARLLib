@@ -69,6 +69,8 @@ class EpisodeRunner:
         self.ft_save_path = None
         self.state_save_path = None
 
+        self.success_time = 0
+
     def setup(self, scheme, groups, preprocess, controller):
         self.scheme = scheme
         self.groups = groups
@@ -101,7 +103,7 @@ class EpisodeRunner:
         self.episode_step = 0
 
     def load_normalizer(self, path):
-        self.normalizer = VecNormalize.load(path)
+        self.normalizer = VecNormalize.load(os.path.join(path, "vec_normalize.pkl"))
 
     def run(self):
         self.reset()
@@ -119,8 +121,12 @@ class EpisodeRunner:
         left_eef_quaternion = []
         right_eef_quaternion = []
         # 记录 action
-        left_acts = []
-        right_acts = []
+        left_acts_x = []
+        left_acts_y = []
+        left_acts_z = []
+        right_acts_x = []
+        right_acts_y = []
+        right_acts_z = []
         # 记录 ft
         left_ft_only = []
         right_ft_only = []
@@ -139,6 +145,9 @@ class EpisodeRunner:
         right_peg_pos = []
         left_peg_to_hole = []
         right_peg_to_hole = []
+        info_success = []
+        info_defeat = []
+        info_timeout = []
 
         while not terminated:
             pre_transition_data = {
@@ -159,6 +168,9 @@ class EpisodeRunner:
                 "terminated": [(terminated and not info["timeout"],)],
             }
 
+            if info["success"] == True:
+                self.success_time += 1
+
             self.batch.update(post_transition_data, ts=self.episode_step)
 
             self.episode_step += 1
@@ -177,8 +189,13 @@ class EpisodeRunner:
                 left_eef_quaternion.append(self.env.obs["robot0_eef_quat"])
                 right_eef_quaternion.append(self.env.obs["robot1_eef_quat"])
                 # 记录 action
-                left_acts.append(actions[0][0])
-                right_acts.append(actions[0][1])
+                left_acts_x.append(actions[0][0][0])
+                left_acts_y.append(actions[0][0][1])
+                left_acts_z.append(actions[0][0][2])
+
+                right_acts_x.append(actions[0][1][0])
+                right_acts_y.append(actions[0][1][1])
+                right_acts_z.append(actions[0][1][2])
 
             if self.ft_record:
                 left_ft_only.append(self.env.obs["robot0_ft"])
@@ -199,6 +216,9 @@ class EpisodeRunner:
                 right_peg_pos.append(self.env.obs["robot1_peg_pos"])
                 left_peg_to_hole.append(self.env.obs["robot0_peg_to_hole"])
                 right_peg_to_hole.append(self.env.obs["robot1_peg_to_hole"])
+                info_success.append(info["success"])
+                info_defeat.append(info["defeat"])
+                info_timeout.append(info["timeout"])
 
         # 结束 video 记录
         if self.video_record:
@@ -220,8 +240,13 @@ class EpisodeRunner:
                 right_eef_quaternion[:, 0], right_eef_quaternion[:, 1], \
                 right_eef_quaternion[:, 2], right_eef_quaternion[:, 3]
             
-            left_acts = np.array(left_acts)
-            right_acts = np.array(right_acts)
+            left_acts_x = np.array(left_acts_x)
+            left_acts_y = np.array(left_acts_y)
+            left_acts_z = np.array(left_acts_z)
+
+            right_acts_x = np.array(right_acts_x)
+            right_acts_y = np.array(right_acts_y)
+            right_acts_z = np.array(right_acts_z)
 
             dataframe = pd.DataFrame({'left_x': left_x, 'left_y': left_y, 'left_z': left_z,
                                       'right_x': right_x, 'right_y': right_y, 'right_z': right_z,
@@ -233,7 +258,9 @@ class EpisodeRunner:
                                       'right_eef_quaternion_y': right_eef_quaternion_y,
                                       'right_eef_quaternion_z': right_eef_quaternion_z,
                                       'right_eef_quaternion_w': right_eef_quaternion_w,
-                                      'left_acts': left_acts, 'right_acts': right_acts
+                                      'left_acts_x': left_acts_x, 'left_acts_y': left_acts_y, 'left_acts_z': left_acts_z,
+                                      'right_acts_x': right_acts_x, 'right_acts_y': right_acts_y, 'right_acts_z': right_acts_z,
+                                      'info_success': info_success, 'info_defeat': info_defeat, 'info_timeout': info_timeout
                                       })
             dataframe.to_csv(self.path_save_path)
 
@@ -321,7 +348,8 @@ class EpisodeRunner:
              'right_peg_pos_x': right_peg_pos_x, 'right_peg_pos_y': right_peg_pos_y, 'right_peg_pos_z': right_peg_pos_z,
              'left_pth_x': left_peg_to_hole_x, 'left_pth_y': left_peg_to_hole_y, 'left_pth_z': left_peg_to_hole_z,
              'right_pth_x': right_peg_to_hole_x, 'right_pth_y': right_peg_to_hole_y, 'right_pth_z': right_peg_to_hole_z,
-             'left_acts': left_acts, 'right_acts': right_acts
+             'left_acts_x': left_acts_x, 'left_acts_y': left_acts_y, 'left_acts_z': left_acts_z,
+             'right_acts_x': right_acts_x, 'right_acts_y': right_acts_y, 'right_acts_z': right_acts_z
             })
             dataframe.to_csv(self.state_save_path)
 

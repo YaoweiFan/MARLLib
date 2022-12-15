@@ -31,6 +31,7 @@ def evaluate_only(args, runner):
         runner.set_path_name(i)
         runner.set_steps(runner.steps)
         runner.run()
+    print("test success rate: ", runner.success_time / args.evaluate_args["evaluate_n_episodes"])
     runner.log()
     runner.close_env()
 
