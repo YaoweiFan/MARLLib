@@ -4,24 +4,26 @@ offpg_args:
   runner: "episode"
   batch_size_run: 1
   use_cuda: False
-  # test_greedy: True
-  test_greedy: False
+  test_greedy: True
+  # test_greedy: False
+  epsilon_start: .05
+  epsilon_finish: .05
 
 evaluate_args:
   evaluate_n_episodes: 100
   video_record: True
   skip_frame: 1  # record every frame
-  # video_save_path: "fix_deterministic_video"
-  video_save_path: "fix_stochastic_video"
+  video_save_path: "rand_deterministic_video"
+  # video_save_path: "rand_stochastic_video"
   path_record: True
-  # path_save_path: "fix_deterministic_path"
-  path_save_path: "fix_stochastic_path"
+  path_save_path: "rand_deterministic_path"
+  # path_save_path: "rand_stochastic_path"
   ft_record: True
-  # ft_save_path: "fix_deterministic_ft"
-  ft_save_path: "fix_stochastic_ft"
+  ft_save_path: "rand_deterministic_ft"
+  # ft_save_path: "rand_stochastic_ft"
   state_record: True
-  # state_save_path: "fix_deterministic_state"
-  state_save_path: "fix_stochastic_state"
+  state_save_path: "rand_deterministic_state"
+  # state_save_path: "rand_stochastic_state"  
   show_q_value: ""  # local or total
 
 env_args:

@@ -152,6 +152,9 @@ class EpisodeRunner:
         right_peg_pos = []
         left_peg_to_hole = []
         right_peg_to_hole = []
+        info_success = []
+        info_defeat = []
+        info_timeout = []
 
         while not terminated:
             pre_transition_data = {
@@ -221,6 +224,9 @@ class EpisodeRunner:
                 right_peg_pos.append(self.env.obs["robot1_peg_pos"])
                 left_peg_to_hole.append(self.env.obs["robot0_peg_to_hole"])
                 right_peg_to_hole.append(self.env.obs["robot1_peg_to_hole"])
+                info_success.append(info["success"])
+                info_defeat.append(info["defeat"])
+                info_timeout.append(info["timeout"])
 
         # 结束 video 记录
         if self.video_record:
@@ -383,7 +389,8 @@ class EpisodeRunner:
              'right_peg_pos_x': right_peg_pos_x, 'right_peg_pos_y': right_peg_pos_y, 'right_peg_pos_z': right_peg_pos_z,
              'left_pth_x': left_peg_to_hole_x, 'left_pth_y': left_peg_to_hole_y, 'left_pth_z': left_peg_to_hole_z,
              'right_pth_x': right_peg_to_hole_x, 'right_pth_y': right_peg_to_hole_y, 'right_pth_z': right_peg_to_hole_z,
-             'left_acts': left_acts, 'right_acts': right_acts
+             'left_acts': left_acts, 'right_acts': right_acts,
+             'info_success': info_success, 'info_defeat': info_defeat, 'info_timeout': info_timeout
             })
             dataframe.to_csv(self.state_save_path)
 
