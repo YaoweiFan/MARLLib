@@ -3,25 +3,25 @@ offpg_args:
   checkpoint_path: "results/models/continuous/offpg_dualarm__2022-11-28_17-03-00"
   runner: "episode"
   batch_size_run: 1
-  log_std_init: -0.5393  # gaussian 采样方差
+  log_std_init: -1.0  # gaussian 采样方差
   # log_std_init: -0.8
 
 evaluate_args:
   evaluate_n_episodes: 100
-  deterministic_policy: False
+  deterministic_policy: True
   video_record: True
   skip_frame: 1  # record every frame
-  # video_save_path: "fix_deterministic_video"
-  video_save_path: "fix_stochastic_-0.5393_video"
+  video_save_path: "rand_deterministic_video"
+  # video_save_path: "rand_stochastic_-1.0_video"
   path_record: True
-  # path_save_path: "fix_deterministic_path"
-  path_save_path: "fix_stochastic_-0.5393_path"
+  path_save_path: "rand_deterministic_path"
+  # path_save_path: "rand_stochastic_-1.0_path"
   ft_record: True
-  # ft_save_path: "fix_deterministic_ft"
-  ft_save_path: "fix_stochastic_-0.5393_ft"
+  ft_save_path: "rand_deterministic_ft"
+  # ft_save_path: "rand_stochastic_-1.0_ft"
   state_record: True
-  # state_save_path: "fix_deterministic_state"
-  state_save_path: "fix_stochastic_-0.5393_state"
+  state_save_path: "rand_deterministic_state"
+  # state_save_path: "rand_stochastic_-1.0_state"
 
 env_args:
   # Mujoco 相关

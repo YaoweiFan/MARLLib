@@ -259,8 +259,7 @@ class EpisodeRunner:
                                       'right_eef_quaternion_z': right_eef_quaternion_z,
                                       'right_eef_quaternion_w': right_eef_quaternion_w,
                                       'left_acts_x': left_acts_x, 'left_acts_y': left_acts_y, 'left_acts_z': left_acts_z,
-                                      'right_acts_x': right_acts_x, 'right_acts_y': right_acts_y, 'right_acts_z': right_acts_z,
-                                      'info_success': info_success, 'info_defeat': info_defeat, 'info_timeout': info_timeout
+                                      'right_acts_x': right_acts_x, 'right_acts_y': right_acts_y, 'right_acts_z': right_acts_z
                                       })
             dataframe.to_csv(self.path_save_path)
 
@@ -349,7 +348,8 @@ class EpisodeRunner:
              'left_pth_x': left_peg_to_hole_x, 'left_pth_y': left_peg_to_hole_y, 'left_pth_z': left_peg_to_hole_z,
              'right_pth_x': right_peg_to_hole_x, 'right_pth_y': right_peg_to_hole_y, 'right_pth_z': right_peg_to_hole_z,
              'left_acts_x': left_acts_x, 'left_acts_y': left_acts_y, 'left_acts_z': left_acts_z,
-             'right_acts_x': right_acts_x, 'right_acts_y': right_acts_y, 'right_acts_z': right_acts_z
+             'right_acts_x': right_acts_x, 'right_acts_y': right_acts_y, 'right_acts_z': right_acts_z,
+             'info_success': info_success, 'info_defeat': info_defeat, 'info_timeout': info_timeout
             })
             dataframe.to_csv(self.state_save_path)
 
