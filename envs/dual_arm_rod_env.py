@@ -124,15 +124,16 @@ class DualArmRodEnv(MultiAgentEnv):
         self.assemble_game = 0
 
         # Mimic trajectory
-        absl_path = os.path.join(dirname(dirname(dirname(__file__))), trajectory_data_path)
-        trajectory_data = pd.read_csv(absl_path)
-        self.robot0_trajectory = np.array([[trajectory_data.Px.array[i],
-                                            trajectory_data.Py.array[i],
-                                            trajectory_data.Pz.array[i]] for i in range(len(trajectory_data.Px.array))])
+        if self.reward_mimic:
+            absl_path = os.path.join(dirname(dirname(dirname(__file__))), trajectory_data_path)
+            trajectory_data = pd.read_csv(absl_path)
+            self.robot0_trajectory = np.array([[trajectory_data.Px.array[i],
+                                                trajectory_data.Py.array[i],
+                                                trajectory_data.Pz.array[i]] for i in range(len(trajectory_data.Px.array))])
 
-        self.robot1_trajectory = np.array([[trajectory_data.Qx.array[i],
-                                            trajectory_data.Qy.array[i],
-                                            trajectory_data.Qz.array[i]] for i in range(len(trajectory_data.Qx.array))])
+            self.robot1_trajectory = np.array([[trajectory_data.Qx.array[i],
+                                                trajectory_data.Qy.array[i],
+                                                trajectory_data.Qz.array[i]] for i in range(len(trajectory_data.Qx.array))])
 
     def _launch(self):
         """Launch the Dual-arm assemble environment."""
