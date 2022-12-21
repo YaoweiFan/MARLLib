@@ -79,7 +79,7 @@ clip_state: 10.0
 epsilon: 0.00000001
 use_running_normalize: True
 
-name: "offpg_dualarm"
+name: "offpg_dualarmrod"
 
 record_param: False  # record controller network or not
 
