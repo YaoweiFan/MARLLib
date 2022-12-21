@@ -7,7 +7,7 @@ reward_defeat: 0
 reward_scale: 3.0
 #state_last_action: True # False: critic adds last action internally
 #state_timestep_number: False
-episode_limit: 50
+episode_limit: 100
 obs_timestep_number: False
 debug: False
 # 任务相关
