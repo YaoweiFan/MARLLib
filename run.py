@@ -115,7 +115,7 @@ def run_sequential(args, logger):
         logger.info("Loading model from {}".format(model_path))
         controller.load_models(model_path, args.record_param)
         learner.load_models(model_path)
-        runner.load_normalizer(model_path+"/vec_normalize.pkl")
+        runner.load_normalizer(model_path)
 
         runner.steps = load_point
 

@@ -24,7 +24,7 @@ object_state_size: 19
 n_agents: 2
 n_actions: 7
 obs_choose: "noft"
-trajectory_data_path: "data/trajectory.csv"
+trajectory_data_path: "data/rod_trajectory_new_new.csv"
 ms_xl: -0.25
 ms_xh: 0.25
 ms_yl: -0.3
