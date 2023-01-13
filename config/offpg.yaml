@@ -18,7 +18,7 @@ buffer_cpu_only: True # If true we won't keep all of the replay buffer in vram
 use_tensorboard: True # Log results to tensorboard
 save_model: True # Save the models to disk
 save_model_interval: 2000000 # Save models after this many timesteps
-checkpoint_path: "" # Load a checkpoint from this path
+checkpoint_path: "results/models/offpg_dualarmrod__2023-01-10_11-42-04" # Load a checkpoint from this path
 evaluate: False # Evaluate model for test_nepisode episodes and quit (no training)
 load_step: 0 # Load model trained on this many timesteps (0 if choose max possible)
 save_replay: False # Saving the replay of the model loaded from checkpoint_path
@@ -57,8 +57,8 @@ label: "default_label"
 # --- COMA specific parameters ---
 action_selector: "multinomial"
 epsilon_start: .5
-epsilon_finish: .05
-epsilon_anneal_time: 500000
+epsilon_finish: .1
+epsilon_anneal_time: 2500000
 mask_before_softmax: False
 
 # use qmix
@@ -79,7 +79,7 @@ clip_state: 10.0
 epsilon: 0.00000001
 use_running_normalize: True
 
-name: "offpg_dualarm"
+name: "offpg_dualarmrod"
 
 record_param: False  # record controller network or not
 
